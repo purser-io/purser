@@ -36,6 +36,9 @@ packages = ["src/purser", "src/purser_deep"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the repo root on sys.path so `from tests.conftest import ...` resolves
+# under any runner (pytest console script, `python -m pytest`, `uv run`).
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
