@@ -126,7 +126,12 @@ jobs:
         env:
           IMAGE: ${{ steps.ref.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
+      # GitHub-native attestation needs a paid plan or a public repo. The cosign
+      # sign + SBOM attest steps above already provide Sigstore-backed signatures
+      # and provenance (in-registry + Rekor), so this is a redundant extra that
+      # activates automatically if the repo is ever made public.
       - name: SLSA build provenance
+        if: github.event.repository.visibility == 'public'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.ref.outputs.image }}
