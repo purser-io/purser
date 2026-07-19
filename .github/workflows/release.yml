@@ -86,7 +86,7 @@ jobs:
           python-version: "3.14"
       - name: Install extras for license resolution
         run: |
-          uv venv
+          uv venv --clear
           uv pip install -e ".[dev,sign,hf,deep]"
       - name: Generate CycloneDX SBOM
         run: |

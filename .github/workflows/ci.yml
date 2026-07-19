@@ -34,7 +34,7 @@ jobs:
           enable-cache: true
       - name: Install (dev + sign extras)
         run: |
-          uv venv
+          uv venv --clear
           uv pip install -e ".[dev,sign]"
       - name: Ruff (lint)
         run: uv run ruff check src tests
@@ -68,7 +68,7 @@ jobs:
       # must be present for the license lookup to succeed.
       - name: Install all extras
         run: |
-          uv venv
+          uv venv --clear
           uv pip install -e ".[dev,sign,hf,deep]"
       - name: Regenerate THIRD_PARTY_LICENSES.md
         run: uv run make licenses
