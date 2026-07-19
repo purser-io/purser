@@ -16,10 +16,15 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 	  awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n",$$1,$$2}'
 
+# Resolve for the image runtime (linux/py3.14) regardless of the host OS/arch,
+# so the lockfiles are reproducible on a laptop and in CI alike.
+UV_COMPILE = uv pip compile --generate-hashes \
+	--python-platform x86_64-unknown-linux-gnu --python-version 3.14
+
 lock: ## Regenerate hash-pinned lockfiles from pyproject.toml
-	uv pip compile --generate-hashes --extra sign -o requirements.lock pyproject.toml
-	uv pip compile --generate-hashes --extra sign --extra hf -o requirements-hf.lock pyproject.toml
-	uv pip compile --generate-hashes --extra deep -o requirements-deep.lock pyproject.toml
+	$(UV_COMPILE) --extra sign -o requirements.lock pyproject.toml
+	$(UV_COMPILE) --extra sign --extra hf -o requirements-hf.lock pyproject.toml
+	$(UV_COMPILE) --extra deep -o requirements-deep.lock pyproject.toml
 
 lock-verify: ## Fail if lockfiles are stale vs pyproject.toml (CI gate)
 	@cp requirements.lock requirements.lock.bak

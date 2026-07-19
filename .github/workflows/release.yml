@@ -85,17 +85,19 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install extras for license resolution
-        run: uv pip install --system -e ".[dev,sign,hf,deep]"
+        run: |
+          uv venv
+          uv pip install -e ".[dev,sign,hf,deep]"
       - name: Generate CycloneDX SBOM
         run: |
           mkdir -p sbom
-          python scripts/gen_sbom.py "${{ matrix.lock }}" \
+          uv run python scripts/gen_sbom.py "${{ matrix.lock }}" \
             "sbom/purser-${{ matrix.name }}.cdx.json" \
             --name "purser${{ matrix.suffix }}" --version "${GITHUB_REF_NAME#v}"
 
       # --- Vulnerability gate: never sign a vulnerable image ---
       - name: Trivy scan (HIGH/CRITICAL, fixed only)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.ref.outputs.image }}@${{ steps.build.outputs.digest }}
           exit-code: "1"
