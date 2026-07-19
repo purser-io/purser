@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Purser Helm values",
+  "type": "object",
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "replicaCount": { "type": "integer", "minimum": 0 },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "pullSecrets": { "type": "array" }
+      },
+      "required": ["repository"]
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "maxUploadMB": { "type": "integer", "minimum": 1 },
+        "maxScanMB": { "type": "integer", "minimum": 1 },
+        "maxConcurrentScans": { "type": "integer", "minimum": 1 },
+        "rateLimitRpm": { "type": "integer", "minimum": 0 },
+        "maxFindingsPerFile": { "type": "integer", "minimum": 1 },
+        "scanRoot": { "type": "string" },
+        "extraEnv": { "type": "array" }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "existingSecret": { "type": "string" },
+        "secretKey": { "type": "string", "minLength": 1 },
+        "apiKey": { "type": "string" }
+      },
+      "required": ["enabled", "secretKey"]
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "existingConfigMap": { "type": "string" },
+        "content": { "type": "object" },
+        "origins": { "type": "object" }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["off", "stdout", "syslog"] },
+        "syslogAddress": { "type": "string" },
+        "syslogFacility": { "type": "string" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "podAnnotations": { "type": "boolean" },
+        "serviceMonitor": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "hf": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "deep": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    }
+  },
+  "required": ["image", "auth"]
+}

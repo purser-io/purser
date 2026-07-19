@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Purser mark">
+  <title>Purser — clearance-stamp mark</title>
+  <defs>
+    <clipPath id="seal"><circle cx="32" cy="32" r="22"/></clipPath>
+  </defs>
+  <!-- "cleared" fill below the stamp bar -->
+  <g clip-path="url(#seal)">
+    <rect x="0" y="40" width="64" height="24" fill="#16B3C6" fill-opacity="0.16"/>
+  </g>
+  <!-- the seal ring -->
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#0E2A47" stroke-width="5"/>
+  <!-- the stamp bar (manifest line) -->
+  <line x1="14" y1="40" x2="50" y2="40" stroke="#0E2A47" stroke-width="4" stroke-linecap="round"/>
+  <!-- "cleared" check -->
+  <polyline points="22,28 29,35 44,19" fill="none" stroke="#16B3C6" stroke-width="5.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,18 @@
+# ModelGuard default policy: block on HIGH+ content findings, warn on
+# unknown origin, no format or country restrictions.
+version: 1
+name: default
+fail_on:
+  severity: HIGH
+formats:
+  mode: off
+  list: []
+origin:
+  mode: off
+  countries: []
+  unknown_origin: warn
+publishers:
+  blocked: []
+  allowed: []
+max_file_size_mb: 0
+rules: []

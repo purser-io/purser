@@ -1,0 +1,27 @@
+# The active scanning policy. Edit and re-apply — no image rebuild needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: purser-policy
+  namespace: purser
+data:
+  policy.yaml: |
+    version: 1
+    name: cluster-default
+    fail_on:
+      severity: HIGH
+    formats:
+      mode: blocklist
+      list: [pickle, joblib, pytorch_legacy]
+    origin:
+      mode: blocklist
+      countries: [CN, RU, KP, IR]
+      unknown_origin: warn
+    publishers:
+      blocked: []
+      allowed: []
+    max_file_size_mb: 51200
+    rules: []
+  # Optional: extend/override the publisher -> country database
+  origins.yaml: |
+    publishers: {}

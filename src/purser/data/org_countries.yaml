@@ -1,0 +1,92 @@
+# Bundled publisher -> country-of-origin database (ISO 3166-1 alpha-2).
+# Publisher keys are lowercase HuggingFace org names (or arbitrary publisher
+# ids you use in provenance sidecars). Extend or override with
+# /etc/purser/origins.yaml or the PURSER_ORIGINS env var.
+publishers:
+  # United States
+  meta-llama: US
+  facebook: US
+  openai: US
+  openai-community: US
+  google: US
+  google-bert: US
+  google-t5: US
+  microsoft: US
+  apple: US
+  nvidia: US
+  amazon: US
+  ibm-granite: US
+  databricks: US
+  snowflake: US
+  salesforce: US
+  allenai: US
+  eleutherai: US
+  togethercomputer: US
+  nousresearch: US
+  anthropic: US
+  perplexity-ai: US
+  mosaicml: US
+  cerebras: US
+  intel: US
+  qualcomm: US
+  # China
+  deepseek-ai: CN
+  qwen: CN
+  alibaba-nlp: CN
+  baai: CN
+  baichuan-inc: CN
+  thudm: CN
+  zhipuai: CN
+  internlm: CN
+  01-ai: CN
+  minimaxai: CN
+  moonshotai: CN
+  bytedance: CN
+  bytedance-seed: CN
+  tencent: CN
+  hunyuan: CN
+  baidu: CN
+  paddlepaddle: CN
+  openbmb: CN
+  skywork: CN
+  xverse: CN
+  cognitivecomputations-yi: CN
+  stepfun-ai: CN
+  # France
+  mistralai: FR
+  kyutai: FR
+  hf-internal-testing: FR
+  huggingface: FR
+  bigscience: FR
+  # United Kingdom
+  stabilityai: GB
+  deepmind: GB
+  # Germany
+  aleph-alpha: DE
+  laion: DE
+  deepset: DE
+  # Israel
+  ai21labs: IL
+  # Canada
+  cohereforai: CA
+  cohere: CA
+  # UAE
+  tiiuae: AE
+  # Russia
+  sberbank-ai: RU
+  ai-forever: RU
+  yandex: RU
+  # Japan
+  rinna: JP
+  cyberagent: JP
+  sakana-ai: JP
+  elyza: JP
+  # Korea
+  upstage: KR
+  naver: KR
+  kakaobrain: KR
+  lg-ai-research: KR
+  # Singapore
+  sea-ai-lab: SG
+  # Netherlands
+  # (add your own below)

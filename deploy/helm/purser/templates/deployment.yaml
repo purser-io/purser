@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "purser.fullname" . }}
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "purser.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  template:
+    metadata:
+      labels:
+        {{- include "purser.labels" . | nindent 8 }}
+        app.kubernetes.io/component: core
+        {{- with .Values.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
+      annotations:
+        # roll pods when the policy ConfigMap changes
+        checksum/policy: {{ include (print $.Template.BasePath "/configmap-policy.yaml") . | sha256sum }}
+        {{- include "purser.podAnnotations" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "purser.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: purser
+          image: {{ include "purser.image" (dict "repo" .Values.image.repository "tag" .Values.image.tag "root" $) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- include "purser.commonEnv" . | nindent 12 }}
+            {{- if .Values.deep.enabled }}
+            - name: PURSER_ENABLE_DEEP
+              value: "1"
+            - name: PURSER_DEEP_URL
+              value: http://{{ include "purser.fullname" . }}-deep:8090
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: policy
+              mountPath: /policies
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.modelStore.enabled }}
+            - name: models
+              mountPath: {{ .Values.modelStore.mountPath }}
+              readOnly: {{ .Values.modelStore.readOnly }}
+            {{- end }}
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ .Values.policy.existingConfigMap | default (printf "%s-policy" (include "purser.fullname" .)) }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.tmp.sizeLimit }}
+        {{- if .Values.modelStore.enabled }}
+        - name: models
+          {{- if .Values.modelStore.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.modelStore.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

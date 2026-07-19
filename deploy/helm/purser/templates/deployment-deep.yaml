@@ -1,0 +1,91 @@
+{{- if .Values.deep.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "purser.fullname" . }}-deep
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: deep
+spec:
+  replicas: {{ .Values.deep.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "purser.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: deep
+  template:
+    metadata:
+      labels:
+        {{- include "purser.labels" . | nindent 8 }}
+        app.kubernetes.io/component: deep
+      annotations:
+        {{- include "purser.podAnnotations" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "purser.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: purser-deep
+          image: {{ include "purser.image" (dict "repo" .Values.deep.image.repository "tag" .Values.deep.image.tag "root" $) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8090
+          env:
+            {{- if .Values.auth.enabled }}
+            - name: PURSER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "purser.authSecretName" . }}
+                  key: {{ .Values.auth.secretKey }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml .Values.deep.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.tmp.sizeLimit }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "purser.fullname" . }}-deep
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: deep
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "purser.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: deep
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http
+{{- end }}

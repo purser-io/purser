@@ -1,0 +1,16 @@
+{{- if and .Values.policy.create (not .Values.policy.existingConfigMap) -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "purser.fullname" . }}-policy
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+data:
+  policy.yaml: |
+    {{- toYaml .Values.policy.content | nindent 4 }}
+  {{- if .Values.policy.origins }}
+  origins.yaml: |
+    publishers:
+      {{- toYaml .Values.policy.origins | nindent 6 }}
+  {{- end }}
+{{- end }}

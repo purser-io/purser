@@ -1,0 +1,31 @@
+# Trust store: binds signing keys (by key_id) to a VERIFIED publisher and
+# country of origin. A signature only confers provenance if its key_id is
+# listed here and the signature verifies under this public key.
+#
+# Generate a keypair with:  purser keygen --out mykey
+# then paste the contents of mykey.pub below.
+keys:
+  - key_id: acme-labs-2026
+    publisher: acme-labs
+    origin: US
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      REPLACE-WITH-YOUR-ED25519-PUBLIC-KEY
+      -----END PUBLIC KEY-----
+    # Optional key lifecycle controls (checked against the signature's
+    # `created` timestamp, else the current time):
+    #   revoked: true            # reject any signature from this key
+    #   not_before: "2026-01-01" # signature must be dated on/after this
+    #   not_after:  "2027-01-01" # signature must be dated on/before this
+    not_before: "2026-01-01"
+    not_after: "2027-01-01"
+
+  # Example of a retired key kept for auditability but no longer trusted:
+  # - key_id: acme-labs-2024
+  #   publisher: acme-labs
+  #   origin: US
+  #   revoked: true
+  #   public_key: |
+  #     -----BEGIN PUBLIC KEY-----
+  #     ...old key...
+  #     -----END PUBLIC KEY-----

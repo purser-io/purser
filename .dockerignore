@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+deploy
+docker-compose.yml
+.git
+.gitlab-ci.yml
+sbom
+*.bak
+gap_analysis.md

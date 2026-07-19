@@ -1,0 +1,55 @@
+# --- Python ---
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.egg
+*.egg-info/
+build/
+dist/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- OS / editors ---
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+.claude/settings.local.json
+
+# --- secrets / local config (never commit) ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.sig
+trust_store.yaml
+
+# --- generated artifacts (reproducible) ---
+sbom/
+*.lock.bak
+
+# --- local model store & scan outputs ---
+models/
+*.sarif
+report*.json
+
+# --- Helm ---
+deploy/helm/**/charts/
+deploy/helm/**/*.tgz
+Chart.lock
+
+# --- internal / not-for-repo docs ---
+gap_analysis.md
+MarketResearch.md
+next-steps.md

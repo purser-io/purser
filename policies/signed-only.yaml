@@ -1,0 +1,25 @@
+# Highest-assurance supply-chain policy:
+#  - the model MUST carry a valid signature from a key in the trust store
+#    (self-asserted --origin / sidecar provenance does NOT satisfy this)
+#  - only the verified origin is then checked against the country allowlist
+#  - only safe-by-design formats are permitted
+#
+# Point PURSER_TRUST_STORE at your trust_store.yaml (see
+# policies/trust_store.example.yaml).
+version: 1
+name: signed-only
+fail_on:
+  severity: HIGH
+formats:
+  mode: allowlist
+  list: [safetensors, gguf, onnx, tf_savedmodel, keras_v3]
+origin:
+  mode: allowlist
+  countries: [US, CA, GB, FR, DE, NL, SE, FI, DK, IE, IL, JP, KR, AU, NZ]
+  unknown_origin: deny
+  require_signed: true
+publishers:
+  blocked: []
+  allowed: []
+max_file_size_mb: 0
+rules: []

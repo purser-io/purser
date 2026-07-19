@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: purser
+  namespace: purser
+  labels:
+    app.kubernetes.io/name: purser
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: purser
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: purser
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: purser
+          image: purser:latest   # replace with your registry image
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PURSER_POLICY
+              value: /policies/policy.yaml
+            - name: PURSER_ORIGINS
+              value: /policies/origins.yaml
+            - name: PURSER_SCAN_ROOT
+              value: /models
+            - name: PURSER_MAX_UPLOAD_MB
+              value: "10240"
+            - name: PURSER_MAX_SCAN_MB
+              value: "4096"
+            - name: PURSER_MAX_CONCURRENT_SCANS
+              value: "4"
+            # Require an API key on all /v1 endpoints (sourced from a Secret).
+            - name: PURSER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: purser-auth
+                  key: api-key
+            # HuggingFace download endpoint is off by default; enable + scope
+            # it deliberately if you need it.
+            - name: PURSER_ENABLE_HF
+              value: "0"
+            - name: PURSER_HF_ALLOWLIST
+              value: ""
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: policy
+              mountPath: /policies
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: models
+              mountPath: /models
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+      volumes:
+        - name: policy
+          configMap:
+            name: purser-policy
+        - name: tmp
+          emptyDir:
+            sizeLimit: 20Gi   # scratch space for uploads / HF downloads
+        - name: models
+          emptyDir: {}        # replace with your model-store PVC:
+          # persistentVolumeClaim:
+          #   claimName: model-store

@@ -1,0 +1,45 @@
+Purser {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Core service (ClusterIP):
+  {{ include "purser.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+
+Port-forward and check health:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "purser.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -s localhost:8080/healthz
+
+{{- if .Values.auth.enabled }}
+
+Auth is ENABLED. Send the key on /v1 requests:
+  {{- if .Values.auth.existingSecret }}
+  (using existing Secret "{{ .Values.auth.existingSecret }}", key "{{ .Values.auth.secretKey }}")
+  {{- else }}
+  KEY=$(kubectl -n {{ .Release.Namespace }} get secret {{ include "purser.authSecretName" . }} -o jsonpath='{.data.{{ .Values.auth.secretKey }}}' | base64 -d)
+  {{- end }}
+  curl -s -H "X-API-Key: $KEY" localhost:8080/v1/policy | jq .
+{{- else }}
+
+WARNING: auth is DISABLED — /v1 endpoints are open. Only run on a trusted network.
+{{- end }}
+
+{{- if .Values.metrics.enabled }}
+
+Metrics: GET /metrics (Prometheus). Import the Grafana dashboard from
+deploy/grafana/purser-overview.json.
+{{- if .Values.metrics.serviceMonitor.enabled }}
+A ServiceMonitor was created for the Prometheus Operator.
+{{- end }}
+{{- end }}
+
+{{- if .Values.deep.enabled }}
+
+Deep-analysis companion is ENABLED; the core is wired to it at
+http://{{ include "purser.fullname" . }}-deep:8090.
+{{- end }}
+{{- if .Values.hf.enabled }}
+
+HuggingFace worker is ENABLED at service {{ include "purser.fullname" . }}-hf
+(makes outbound calls — keep it on an egress-restricted node).
+{{- end }}
+
+Scan a model (verdict drives the exit/verdict; JSON body of the report returned):
+  curl -s {{ if .Values.auth.enabled }}-H "X-API-Key: $KEY" {{ end }}-F "file=@model.safetensors" localhost:8080/v1/scan/upload | jq .verdict

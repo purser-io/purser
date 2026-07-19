@@ -1,0 +1,212 @@
+# Default values for the Purser chart.
+# Every setting is documented; the defaults are a sane, secure production start.
+
+# -- Override the chart name / full release name.
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: purser
+  # Defaults to the chart's appVersion when empty. Pin a digest/tag in prod.
+  tag: ""
+  pullPolicy: IfNotPresent
+  # e.g. [{ name: my-regcred }]
+  pullSecrets: []
+
+# Core scanner replicas (ignored when autoscaling.enabled).
+replicaCount: 2
+
+# ---------------------------------------------------------------------------
+# Purser configuration -> PURSER_* env on the core service.
+# ---------------------------------------------------------------------------
+config:
+  maxUploadMB: 10240          # PURSER_MAX_UPLOAD_MB   (HTTP 413 beyond)
+  maxScanMB: 4096             # PURSER_MAX_SCAN_MB     (exfil scan window)
+  maxConcurrentScans: 4       # PURSER_MAX_CONCURRENT_SCANS (429 when full)
+  rateLimitRpm: 0             # PURSER_RATE_LIMIT_RPM  (0 = off)
+  maxFindingsPerFile: 500     # PURSER_MAX_FINDINGS_PER_FILE
+  scanRoot: /models           # PURSER_SCAN_ROOT (path-scan confinement)
+  # Extra raw env entries appended verbatim, e.g. [{name: FOO, value: "bar"}].
+  extraEnv: []
+
+# API-key auth on /v1 endpoints (/healthz and /metrics stay open).
+auth:
+  enabled: true
+  # Reference an existing Secret (recommended: manage keys outside the chart /
+  # via an external-secrets operator). Must contain `secretKey` below.
+  existingSecret: ""
+  secretKey: api-key
+  # Only used when existingSecret is empty: the chart creates a Secret from this.
+  # Prefer existingSecret in production; committing a key here is discouraged.
+  apiKey: ""
+
+# Scan policy. Rendered into a ConfigMap and mounted at /policies/policy.yaml,
+# so you change rules with `helm upgrade` (no image rebuild).
+policy:
+  create: true
+  existingConfigMap: ""       # use your own ConfigMap instead (key: policy.yaml)
+  content:
+    version: 1
+    name: cluster-default
+    fail_on:
+      severity: HIGH
+    formats:
+      mode: blocklist
+      list: [pickle, joblib, pytorch_legacy]
+    origin:
+      mode: blocklist
+      countries: [CN, RU, KP, IR]
+      unknown_origin: warn
+    max_file_size_mb: 51200
+  # Optional publisher->country overrides mounted as origins.yaml.
+  origins: {}
+
+# Structured audit log (JSON) — off | stdout | syslog.
+audit:
+  mode: "off"
+  syslogAddress: /dev/log     # or host:port for a UDP collector
+  syslogFacility: user
+
+metrics:
+  enabled: true               # /metrics endpoint (PURSER_METRICS_ENABLED)
+  # Scrape annotations on the pod (for prometheus.io/scrape discovery).
+  podAnnotations: true
+  # Prometheus Operator ServiceMonitor (requires the CRD).
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10g   # set to your real max
+  hosts:
+    - host: purser.example.internal
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Model store mounted for POST /v1/scan/path (optional).
+modelStore:
+  enabled: false
+  existingClaim: ""           # PVC name; if empty an emptyDir is used
+  mountPath: /models
+  readOnly: true
+
+# Scratch space for uploads / temp files (container root FS is read-only).
+tmp:
+  sizeLimit: 20Gi
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+  # targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Restrict traffic. When enabled: ingress only to the API port (from
+# `networkPolicy.allowFrom`), egress limited to DNS (+ extras you add).
+networkPolicy:
+  enabled: false
+  allowFrom: []               # e.g. [{ namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
+  extraEgress: []
+
+# --- pod hardening (applied to every Purser workload) ---
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: ["ALL"]
+
+# Probes (paths are fixed; timings tunable).
+probes:
+  startup:
+    initialDelaySeconds: 3
+    periodSeconds: 3
+    failureThreshold: 20
+  liveness:
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Spread across nodes/zones by default for resilience.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: core
+
+# ---------------------------------------------------------------------------
+# Optional HuggingFace download worker (separate image; makes outbound calls).
+# ---------------------------------------------------------------------------
+hf:
+  enabled: false
+  image:
+    repository: purser-hf
+    tag: ""
+  replicaCount: 1
+  hfAllowlist: ""             # comma-separated org/ prefixes; empty = any
+  hfTokenSecret: ""          # Secret name containing key HF_TOKEN (private repos)
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 4Gi }
+
+# ---------------------------------------------------------------------------
+# Optional deep-analysis companion (gadget-chain + weight tampering/stego).
+# When enabled, the core is auto-wired to call it (PURSER_ENABLE_DEEP + URL).
+# ---------------------------------------------------------------------------
+deep:
+  enabled: false
+  image:
+    repository: purser-deep
+    tag: ""
+  replicaCount: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "2", memory: 4Gi }

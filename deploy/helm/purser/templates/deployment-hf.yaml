@@ -1,0 +1,103 @@
+{{- if .Values.hf.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "purser.fullname" . }}-hf
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hf
+spec:
+  replicas: {{ .Values.hf.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "purser.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: hf
+  template:
+    metadata:
+      labels:
+        {{- include "purser.labels" . | nindent 8 }}
+        app.kubernetes.io/component: hf
+      annotations:
+        checksum/policy: {{ include (print $.Template.BasePath "/configmap-policy.yaml") . | sha256sum }}
+        {{- include "purser.podAnnotations" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "purser.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: purser-hf
+          image: {{ include "purser.image" (dict "repo" .Values.hf.image.repository "tag" .Values.hf.image.tag "root" $) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "purser.commonEnv" . | nindent 12 }}
+            - name: PURSER_ENABLE_HF
+              value: "1"
+            - name: PURSER_HF_ALLOWLIST
+              value: {{ .Values.hf.hfAllowlist | quote }}
+            {{- if .Values.hf.hfTokenSecret }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hf.hfTokenSecret }}
+                  key: HF_TOKEN
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml .Values.hf.resources | nindent 12 }}
+          volumeMounts:
+            - name: policy
+              mountPath: /policies
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ .Values.policy.existingConfigMap | default (printf "%s-policy" (include "purser.fullname" .)) }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.tmp.sizeLimit }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "purser.fullname" . }}-hf
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hf
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "purser.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: hf
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+{{- end }}

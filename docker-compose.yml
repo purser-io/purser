@@ -1,0 +1,72 @@
+services:
+  purser:
+    build:
+      context: .
+      dockerfile: Dockerfile          # slim core image (no HuggingFace)
+    image: purser:dev
+    ports:
+      - "8080:8080"
+    environment:
+      PURSER_POLICY: /policies/strict.yaml
+      PURSER_SCAN_ROOT: /models
+      PURSER_MAX_UPLOAD_MB: "10240"
+      PURSER_MAX_SCAN_MB: "4096"
+      PURSER_MAX_CONCURRENT_SCANS: "4"
+      # Require an API key on /v1 endpoints (set via .env or your secret store).
+      PURSER_API_KEY: ${PURSER_API_KEY:-}
+      # Deep companion analysis — off unless you start the `deep` profile.
+      # `docker compose --profile deep up` sets these to turn it on.
+      PURSER_ENABLE_DEEP: ${PURSER_ENABLE_DEEP:-0}
+      PURSER_DEEP_URL: ${PURSER_DEEP_URL:-}
+    volumes:
+      - ./policies:/policies:ro
+      - ./models:/models:ro           # mount your model store here
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Optional deep-analysis companion (gadget-chain + weight tampering/stego).
+  # Start with:  PURSER_ENABLE_DEEP=1 PURSER_DEEP_URL=http://purser-deep:8090 \
+  #              docker compose --profile deep up
+  purser-deep:
+    profiles: [deep]
+    build:
+      context: .
+      dockerfile: Dockerfile.deep
+    image: purser-deep:dev
+    environment:
+      PURSER_API_KEY: ${PURSER_API_KEY:-}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Optional HuggingFace download worker. Start with:  docker compose --profile hf up
+  # Keep this on an egress-restricted node; it makes outbound calls to the Hub.
+  purser-hf:
+    profiles: [hf]
+    build:
+      context: .
+      dockerfile: Dockerfile.hf
+    image: purser-hf:dev
+    ports:
+      - "8081:8080"
+    environment:
+      PURSER_POLICY: /policies/strict.yaml
+      PURSER_API_KEY: ${PURSER_API_KEY:-}
+      PURSER_ENABLE_HF: "1"
+      PURSER_HF_ALLOWLIST: ""     # scope to org/ prefixes in production
+      # HF_TOKEN: ${HF_TOKEN}          # for private HuggingFace repos
+    volumes:
+      - ./policies:/policies:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

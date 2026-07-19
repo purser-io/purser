@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "purser.fullname" . }}-test-connection
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: healthz
+      image: {{ include "purser.image" (dict "repo" .Values.image.repository "tag" .Values.image.tag "root" $) }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      command: ["/venv/bin/python", "-c"]
+      args:
+        - |
+          import sys, urllib.request
+          url = "http://{{ include "purser.fullname" . }}:{{ .Values.service.port }}/healthz"
+          with urllib.request.urlopen(url, timeout=10) as r:
+              sys.exit(0 if r.status == 200 else 1)

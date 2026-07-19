@@ -1,0 +1,21 @@
+# Optional: expose the API. Adjust host/class/TLS for your cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: purser
+  namespace: purser
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10g   # large model uploads
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: purser.example.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: purser
+                port:
+                  name: http

@@ -1,0 +1,41 @@
+[project]
+name = "purser"
+version = "0.1.0"
+description = "ML model security scanner: malicious-code and data-exfiltration detection with policy-based supply-chain controls"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Purser" }]
+dependencies = [
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "typer>=0.12",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+hf = ["huggingface_hub>=0.23"]
+h5 = ["h5py>=3.10"]
+sign = ["cryptography>=42"]
+# Deep companion analyzers (gadget-chain + weight tampering). No extra runtime
+# deps — the analyzers are stdlib-only and reuse the core engines.
+deep = []
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.4", "cryptography>=42"]
+
+[project.scripts]
+purser = "purser.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/purser", "src/purser_deep"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

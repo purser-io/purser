@@ -1,0 +1,23 @@
+# Strict supply-chain policy example:
+#  - any MEDIUM+ finding fails the scan
+#  - pickle-family formats are banned outright (use safetensors/GGUF/ONNX)
+#  - models originating from listed countries are blocked
+#  - unknown origin is a hard deny (must be provenanced)
+version: 1
+name: strict
+fail_on:
+  severity: MEDIUM
+formats:
+  mode: blocklist
+  list: [pickle, joblib, pytorch_legacy, numpy]
+origin:
+  mode: blocklist
+  countries: [CN, RU, KP, IR]
+  unknown_origin: deny
+publishers:
+  blocked: []
+  allowed: []
+max_file_size_mb: 51200
+rules:
+  - id: PICKLE_UNKNOWN_IMPORT
+    action: deny

@@ -1,0 +1,18 @@
+# Allowlist example: only models from the listed countries may be used,
+# and only safe-by-design formats are permitted.
+version: 1
+name: allowlist-us-eu
+fail_on:
+  severity: HIGH
+formats:
+  mode: allowlist
+  list: [safetensors, gguf, onnx, tf_savedmodel, keras_v3, tflite, executorch, coreml]
+origin:
+  mode: allowlist
+  countries: [US, CA, GB, FR, DE, NL, SE, FI, DK, IE, IL, JP, KR, AU, NZ]
+  unknown_origin: deny
+publishers:
+  blocked: []
+  allowed: []
+max_file_size_mb: 0
+rules: []
