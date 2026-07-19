@@ -6,7 +6,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 image:
-  repository: purser
+  repository: ghcr.io/purser-io/purser
   # Defaults to the chart's appVersion when empty. Pin a digest/tag in prod.
   tag: ""
   pullPolicy: IfNotPresent
@@ -188,7 +188,7 @@ topologySpreadConstraints:
 hf:
   enabled: false
   image:
-    repository: purser-hf
+    repository: ghcr.io/purser-io/purser-hf
     tag: ""
   replicaCount: 1
   hfAllowlist: ""             # comma-separated org/ prefixes; empty = any
@@ -204,7 +204,7 @@ hf:
 deep:
   enabled: false
   image:
-    repository: purser-deep
+    repository: ghcr.io/purser-io/purser-deep
     tag: ""
   replicaCount: 1
   resources:

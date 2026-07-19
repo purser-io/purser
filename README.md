@@ -51,8 +51,8 @@ scan models against the in-cluster service (rules change via `helm upgrade`, no
 rebuild). Two patterns:
 
 ```bash
-helm install purser deploy/helm/purser -n purser --create-namespace \
-  --set image.repository=registry.example.com/purser
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+  -n purser --create-namespace
 KEY=$(kubectl -n purser get secret purser-auth -o jsonpath='{.data.api-key}' | base64 -d)
 
 # 1) push a model to it — read the verdict (PASS / WARN / FAIL / BLOCKED)
@@ -76,7 +76,7 @@ bad model fails the build on its own:
 ```yaml
 scan-models:
   stage: security
-  image: registry.example.com/purser:latest
+  image: ghcr.io/purser-io/purser:latest
   script:
     - purser scan ./models --policy .purser/policy.yaml --format sarif --output purser.sarif
   artifacts: { when: always, paths: [purser.sarif] }
@@ -468,8 +468,10 @@ NetworkPolicy, a values-driven policy ConfigMap, generated/retained API-key
 Secret, and optional HF-worker + deep-companion subcharts (auto-wired):
 
 ```bash
-helm install purser deploy/helm/purser -n purser --create-namespace \
-  --set image.repository=registry.example.com/purser
+# published OCI chart (defaults to the ghcr.io/purser-io/purser images)…
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+  -n purser --create-namespace
+# …or from a source checkout: helm install purser deploy/helm/purser ...
 helm test purser -n purser
 ```
 

@@ -144,9 +144,48 @@ jobs:
           name: sbom-${{ matrix.name }}
           path: sbom/purser-${{ matrix.name }}.cdx.json
 
+  chart:
+    name: publish Helm chart
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write        # push chart to GHCR (OCI)
+      id-token: write         # cosign keyless
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: sigstore/cosign-installer@v3
+      # Stamp the chart version + appVersion from the tag (no in-repo edit).
+      - name: Package chart
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+          helm package deploy/helm/purser \
+            --version "$VERSION" --app-version "$VERSION" -d dist
+      - name: Log in to GHCR (Helm registry)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push chart (OCI) and cosign-sign
+        run: |
+          out=$(helm push "dist/purser-${VERSION}.tgz" \
+            "oci://ghcr.io/${{ github.repository_owner }}/charts" 2>&1)
+          echo "$out"
+          digest=$(echo "$out" | awk -F': ' '/Digest:/ {print $2}')
+          test -n "$digest" || { echo "::error::could not parse chart digest"; exit 1; }
+          cosign sign --yes \
+            "ghcr.io/${{ github.repository_owner }}/charts/purser@${digest}"
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart
+          path: dist/*.tgz
+
   release:
     name: publish GitHub Release
-    needs: images
+    needs: [images, chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,6 +197,11 @@ jobs:
           pattern: sbom-*
           path: sbom
           merge-multiple: true
+      - name: Collect chart
+        uses: actions/download-artifact@v4
+        with:
+          name: chart
+          path: dist
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -165,3 +209,4 @@ jobs:
           files: |
             sbom/*.cdx.json
             THIRD_PARTY_LICENSES.md
+            dist/*.tgz
