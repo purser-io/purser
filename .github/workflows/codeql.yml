@@ -16,9 +16,13 @@ jobs:
   analyze:
     name: analyze (python)
     runs-on: ubuntu-latest
+    # Code scanning upload needs GitHub Advanced Security, which isn't available
+    # on private repos. Stay dormant until the repo is public (skipped != failed).
+    if: github.event.repository.visibility == 'public'
     permissions:
       contents: read
       security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Initialize CodeQL
