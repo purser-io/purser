@@ -26,9 +26,9 @@ jobs:
         # The support range declared in pyproject (requires-python >=3.11).
         python: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up uv + Python ${{ matrix.python }}
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
@@ -45,8 +45,8 @@ jobs:
     name: lockfile drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.14"
           # Pin uv: lockfile output is uv-version-specific, so this must match
@@ -60,8 +60,8 @@ jobs:
     name: THIRD_PARTY_LICENSES drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.14"
       # gen_sbom.py resolves licenses from *installed* metadata, so every dep
@@ -87,8 +87,8 @@ jobs:
     name: helm lint + template
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
       - name: Lint
         run: helm lint deploy/helm/purser
       - name: Render (defaults)
@@ -117,12 +117,12 @@ jobs:
           - { name: hf, file: Dockerfile.hf }
           - { name: deep, file: Dockerfile.deep }
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       # Single-arch, loaded into the local daemon (no registry push on PRs) so
       # the Dockerfiles are exercised and the image can be vuln-scanned.
       - name: Build ${{ matrix.name }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.file }}
