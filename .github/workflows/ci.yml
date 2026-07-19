@@ -1,0 +1,130 @@
+# Continuous integration: lint + test across the supported Python range,
+# lockfile / license drift gates, Helm chart validation, and a no-push build of
+# all three images (so a broken Dockerfile fails the PR, not the release).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The support range declared in pyproject (requires-python >=3.11).
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv + Python ${{ matrix.python }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Install (dev + sign extras)
+        run: uv pip install --system -e ".[dev,sign]"
+      - name: Ruff (lint)
+        run: ruff check src tests
+      - name: Pytest
+        run: pytest -q
+
+  lockfiles:
+    name: lockfile drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      # Fails if requirements*.lock drift from pyproject.toml (supply-chain gate).
+      - name: Verify lockfiles are current
+        run: make lock-verify
+
+  licenses:
+    name: THIRD_PARTY_LICENSES drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      # gen_sbom.py resolves licenses from *installed* metadata, so the deps
+      # must be present for the regenerated file to match the committed one.
+      - name: Install all extras
+        run: uv pip install --system -e ".[dev,sign,hf,deep]"
+      - name: Regenerate THIRD_PARTY_LICENSES.md
+        run: make licenses
+      - name: Fail if committed file is stale
+        run: |
+          if ! git diff --exit-code -- THIRD_PARTY_LICENSES.md; then
+            echo "::error::THIRD_PARTY_LICENSES.md is stale — run 'make licenses' and commit."
+            exit 1
+          fi
+
+  helm:
+    name: helm lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: helm lint deploy/helm/purser
+      - name: Render (defaults)
+        run: helm template purser deploy/helm/purser > /dev/null
+      - name: Render (all optional components)
+        run: |
+          helm template purser deploy/helm/purser \
+            --set deep.enabled=true \
+            --set hf.enabled=true \
+            --set ingress.enabled=true \
+            --set autoscaling.enabled=true \
+            --set networkPolicy.enabled=true \
+            --set podDisruptionBudget.enabled=true \
+            --set metrics.serviceMonitor.enabled=true > /dev/null
+
+  docker:
+    name: docker build (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: core, file: Dockerfile }
+          - { name: hf, file: Dockerfile.hf }
+          - { name: deep, file: Dockerfile.deep }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Single-arch, loaded into the local daemon (no registry push on PRs) so
+      # the Dockerfiles are exercised and the image can be vuln-scanned.
+      - name: Build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          load: true
+          tags: purser-${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Trivy scan (HIGH/CRITICAL, fixed only)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: purser-${{ matrix.name }}:ci
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library

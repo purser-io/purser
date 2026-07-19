@@ -1,0 +1,23 @@
+# Keep the GitHub Actions and Python dependency trees patched.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Lockfiles are hash-pinned and regenerated via `make lock`; Dependabot
+    # signals updates against pyproject, and `make lock-verify` gates drift.
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

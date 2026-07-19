@@ -1,0 +1,80 @@
+# Watches the Chainguard Wolfi base image. The Dockerfiles pin wolfi-base by
+# digest for reproducibility; Chainguard rebuilds `:latest` frequently to pick
+# up CVE fixes, so a static pin silently goes stale. This job compares the pin
+# against the live index digest weekly and opens/updates an issue on drift.
+name: Wolfi base drift
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare pinned digest against live latest
+        id: check
+        run: |
+          set -euo pipefail
+          pinned=$(grep -oE 'sha256:[a-f0-9]{64}' Dockerfile | head -1)
+          token=$(curl -s "https://cgr.dev/token?scope=repository:chainguard/wolfi-base:pull" | jq -r .token)
+          live=$(curl -sI \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://cgr.dev/v2/chainguard/wolfi-base/manifests/latest" \
+            | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "live=$live"     >> "$GITHUB_OUTPUT"
+          echo "Pinned: $pinned"
+          echo "Live:   $live"
+          if [ "$pinned" = "$live" ]; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "Base image is current."
+          else
+            echo "drift=true"  >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open / update drift issue
+        if: steps.check.outputs.drift == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pinned = "${{ steps.check.outputs.pinned }}";
+            const live   = "${{ steps.check.outputs.live }}";
+            const title  = "Wolfi base image is out of date";
+            const body = [
+              "The pinned `cgr.dev/chainguard/wolfi-base:latest` digest is stale.",
+              "",
+              "| | digest |",
+              "|---|---|",
+              "| pinned (Dockerfiles) | `" + pinned + "` |",
+              "| live `:latest` | `" + live + "` |",
+              "",
+              "Update the `ARG WOLFI=...@<digest>` line in `Dockerfile`, " +
+              "`Dockerfile.hf`, and `Dockerfile.deep` to the live digest " +
+              "(`make base-digest` prints it), then rebuild.",
+            ].join("\n");
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: "open", labels: "wolfi-base",
+            });
+            if (existing.data.length) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ["wolfi-base", "security"],
+              });
+            }

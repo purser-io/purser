@@ -1,0 +1,160 @@
+# Release pipeline (runs on version tags): build + push all three images to
+# GHCR multi-arch, generate CycloneDX SBOMs, gate on vulnerabilities, then
+# keyless-sign + attest (SLSA provenance + SBOM) each image by digest, and cut
+# a GitHub Release carrying the SBOMs and THIRD_PARTY_LICENSES.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag/ref to build"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write        # push to GHCR
+      id-token: write         # cosign keyless + provenance attestation
+      attestations: write     # actions/attest-build-provenance
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: core, file: Dockerfile,      suffix: "",      lock: requirements.lock }
+          - { name: hf,   file: Dockerfile.hf,   suffix: "-hf",   lock: requirements-hf.lock }
+          - { name: deep, file: Dockerfile.deep, suffix: "-deep", lock: requirements-deep.lock }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}${{ matrix.suffix }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push (amd64 + arm64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Set image ref
+        id: ref
+        run: echo "image=${REGISTRY}/${GH_REPO}${SUFFIX}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_REPO: ${{ github.repository }}
+          SUFFIX: ${{ matrix.suffix }}
+
+      # --- SBOM (CycloneDX, license-aware) from the hash-pinned lockfile ---
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: Install extras for license resolution
+        run: uv pip install --system -e ".[dev,sign,hf,deep]"
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p sbom
+          python scripts/gen_sbom.py "${{ matrix.lock }}" \
+            "sbom/purser-${{ matrix.name }}.cdx.json" \
+            --name "purser${{ matrix.suffix }}" --version "${GITHUB_REF_NAME#v}"
+
+      # --- Vulnerability gate: never sign a vulnerable image ---
+      - name: Trivy scan (HIGH/CRITICAL, fixed only)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.ref.outputs.image }}@${{ steps.build.outputs.digest }}
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: OSV scan of SBOM deps (advisory)
+        continue-on-error: true
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/w" \
+            ${{ env.REGISTRY }}/google/osv-scanner:latest \
+            scan --sbom="/w/sbom/purser-${{ matrix.name }}.cdx.json"
+
+      # --- Sign + attest by digest (keyless via Fulcio/Rekor) ---
+      - uses: sigstore/cosign-installer@v3
+      - name: Cosign sign
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ steps.ref.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - name: Cosign attest SBOM
+        run: |
+          cosign attest --yes --type cyclonedx \
+            --predicate "sbom/purser-${{ matrix.name }}.cdx.json" \
+            "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ steps.ref.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - name: SLSA build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.ref.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom/purser-${{ matrix.name }}.cdx.json
+
+  release:
+    name: publish GitHub Release
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
+          path: sbom
+          merge-multiple: true
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            sbom/*.cdx.json
+            THIRD_PARTY_LICENSES.md
