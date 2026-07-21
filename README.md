@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/purser-io/purser/actions/workflows/ci.yml/badge.svg)](https://github.com/purser-io/purser/actions/workflows/ci.yml)
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-&nbsp;![Version](https://img.shields.io/badge/version-0.1.0-informational.svg)
+&nbsp;![Version](https://img.shields.io/badge/version-0.1.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
 &nbsp;![Tests](https://img.shields.io/badge/tests-172%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
@@ -51,7 +51,7 @@ scan models against the in-cluster service (rules change via `helm upgrade`, no
 rebuild). Two patterns:
 
 ```bash
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
   -n purser --create-namespace
 KEY=$(kubectl -n purser get secret purser-auth -o jsonpath='{.data.api-key}' | base64 -d)
 
@@ -469,7 +469,7 @@ Secret, and optional HF-worker + deep-companion subcharts (auto-wired):
 
 ```bash
 # published OCI chart (defaults to the ghcr.io/purser-io/purser images)…
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
   -n purser --create-namespace
 # …or from a source checkout: helm install purser deploy/helm/purser ...
 helm test purser -n purser

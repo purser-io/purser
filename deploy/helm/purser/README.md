@@ -8,14 +8,14 @@ deep-analysis companion.
 
 ```bash
 # published OCI chart (recommended) — defaults to the ghcr.io/purser-io images
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
   -n purser --create-namespace
 
 # …or from a source checkout
 helm install purser deploy/helm/purser -n purser --create-namespace
 
 # manage the API key yourself / mirror the images
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
   -n purser --create-namespace \
   --set auth.existingSecret=purser-api-key \
   --set image.repository=my-mirror.example.com/purser

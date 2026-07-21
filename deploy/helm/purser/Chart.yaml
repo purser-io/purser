@@ -3,9 +3,9 @@ name: purser
 description: Purser — ML model security scanner with policy-based supply-chain controls
 type: application
 # Chart version — bump on any chart change (SemVer).
-version: 0.1.0
+version: 0.1.1
 # Version of the Purser app the chart deploys by default.
-appVersion: "0.1.0"
+appVersion: "0.1.1"
 kubeVersion: ">=1.25.0-0"
 home: https://example.com/purser
 sources:

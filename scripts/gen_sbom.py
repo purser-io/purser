@@ -6,7 +6,7 @@ is reproducible from the lockfile and can be committed / diffed / attested.
 
 Usage:
     python scripts/gen_sbom.py requirements.lock sbom/purser-core.cdx.json \
-        --name purser --version 0.1.0
+        --name purser --version 0.1.1
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("lockfile")
     ap.add_argument("output")
     ap.add_argument("--name", default="purser")
-    ap.add_argument("--version", default="0.1.0")
+    ap.add_argument("--version", default="0.1.1")
     args = ap.parse_args(argv)
 
     text = Path(args.lockfile).read_text()

@@ -27,7 +27,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: purser
-          image: ghcr.io/purser-io/purser:0.1.0   # or your mirror / pinned digest
+          image: ghcr.io/purser-io/purser:0.1.1   # or your mirror / pinned digest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

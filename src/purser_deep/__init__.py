@@ -15,4 +15,4 @@ scope. These are higher-recall, higher-false-positive *static* heuristics —
 run them as a second opinion, not a gate on their own.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
