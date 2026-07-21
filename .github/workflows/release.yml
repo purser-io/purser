@@ -1,7 +1,8 @@
 # Release pipeline (runs on version tags): build + push all three images to
 # GHCR multi-arch, generate CycloneDX SBOMs, gate on vulnerabilities, then
-# keyless-sign + attest (SLSA provenance + SBOM) each image by digest, and cut
-# a GitHub Release carrying the SBOMs and THIRD_PARTY_LICENSES.
+# keyless-sign + attest (SLSA provenance + SBOM) each image by digest; build the
+# PyPI sdist+wheel (and publish via Trusted Publishing when opted in); and cut a
+# GitHub Release carrying the SBOMs, THIRD_PARTY_LICENSES, chart, and dists.
 name: Release
 
 on:
@@ -191,9 +192,55 @@ jobs:
           name: chart
           path: dist/*.tgz
 
+  pydist:
+    name: build PyPI distributions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      # sdist + wheel via the hatchling backend (isolated build env).
+      - name: Build sdist + wheel
+        run: uv build --sdist --wheel --out-dir dist
+      - name: Validate package metadata
+        run: uvx twine check dist/*
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pydist
+          path: dist/*
+
+  pypi-publish:
+    name: publish to PyPI
+    needs: pydist
+    # Publishes only once you opt in (repo variable PUBLISH_PYPI=true) AND a PyPI
+    # Trusted Publisher is configured for this repo + workflow + environment
+    # "pypi". Until then the sdist/wheel are still built and attached to the
+    # GitHub Release by the `pydist`/`release` jobs.
+    if: vars.PUBLISH_PYPI == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/purser
+    permissions:
+      id-token: write        # PyPI Trusted Publishing (OIDC) — no API token
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pydist
+          path: dist
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true   # tolerate an already-uploaded placeholder version
+
   release:
     name: publish GitHub Release
-    needs: [images, chart]
+    needs: [images, chart, pydist]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -210,6 +257,11 @@ jobs:
         with:
           name: chart
           path: dist
+      - name: Collect PyPI distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pydist
+          path: dist
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -218,3 +270,5 @@ jobs:
             sbom/*.cdx.json
             THIRD_PARTY_LICENSES.md
             dist/*.tgz
+            dist/*.whl
+            dist/*.tar.gz
