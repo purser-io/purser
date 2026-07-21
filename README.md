@@ -32,9 +32,9 @@ opcode-level.
 > [data scientists checking models](docs/data-scientists.md).
 
 > [!NOTE]
-> Pre-1.0 and **not yet published to PyPI / a public registry** (the name is
-> pending trademark clearance — see [`BRAND.md`](BRAND.md)). Install from source
-> or build the container images below.
+> Pre-1.0. Published to **PyPI** — `pip install purser` — with signed container
+> images and a Helm chart on GHCR (see below). The name is pending trademark
+> clearance ([`BRAND.md`](BRAND.md)).
 
 ## Contents
 
@@ -215,7 +215,7 @@ checks the signature against a **trust store** that binds each signing key to a
 verified publisher + country.
 
 ```bash
-pip install ".[sign]"                       # or use the Docker image
+pip install "purser[sign]"                  # or use the Docker image
 purser keygen --out mykey               # Ed25519 keypair
 purser sign model.safetensors --key mykey.key --key-id acme-2026
 # add mykey.pub to trust_store.yaml (see policies/trust_store.example.yaml)
@@ -235,7 +235,7 @@ this is what turns country-of-origin from a label into an enforced control.
 ## Install and CLI usage
 
 ```bash
-pip install ".[sign]"    # from a source checkout (not yet on PyPI); +[hf] HF download, +[h5] h5py
+pip install "purser[sign]"    # +[hf] HuggingFace download, +[h5] h5py; or install from source
 purser scan model.pt
 purser scan ./model-dir --policy policies/strict.yaml
 purser scan hf://deepseek-ai/DeepSeek-R1 --policy policies/strict.yaml   # needs [hf]
