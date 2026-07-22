@@ -412,12 +412,15 @@ the running container, which runs as non-root `10001:10001`. Update the base pin
 with `make base-digest`.
 
 ```bash
-make build           # core image, hash-verified deps
-make build-hf        # HF worker image
+# Pull the published, signed, multi-arch image (also -hf and -deep variants):
 docker run --rm -v $PWD/models:/models:ro -v $PWD/policies:/policies:ro \
-  -e PURSER_POLICY=/policies/strict.yaml -p 8080:8080 purser:dev
+  -e PURSER_POLICY=/policies/strict.yaml -p 8080:8080 \
+  ghcr.io/purser-io/purser:0.1.1
 # one-shot CLI scan:
-docker run --rm -v $PWD/models:/models:ro purser:dev purser scan /models
+docker run --rm -v $PWD/models:/models:ro \
+  ghcr.io/purser-io/purser:0.1.1 purser scan /models
+
+# …or build locally: make build (core) · make build-hf · make build-deep → purser:dev
 ```
 
 Or `docker compose up` (see `docker-compose.yml`).
