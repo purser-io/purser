@@ -1,0 +1,26 @@
+# Demo policy: block models whose (verified or claimed) country of origin is China.
+#
+#  - CN is blocklisted  -> a CN-origin model yields a BLOCKED verdict (exit 2)
+#  - unknown origin only warns; every other origin passes the origin check
+#  - HIGH+ malicious-content findings still fail the scan (fail_on)
+#
+# Origin comes from a verified signature (trust store) when present, otherwise
+# from Purser's publisher->country database (`purser origins`) or the
+# self-asserted `--origin` flag. Set `require_signed: true` to make CN an
+# enforced fact rather than a claim.
+version: 1
+name: block-china
+fail_on:
+  severity: HIGH
+formats:
+  mode: blocklist
+  list: []
+origin:
+  mode: blocklist
+  countries: [CN]
+  unknown_origin: warn
+publishers:
+  blocked: []
+  allowed: []
+max_file_size_mb: 0
+rules: []

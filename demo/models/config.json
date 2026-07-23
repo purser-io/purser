@@ -1,0 +1,8 @@
+{
+  "model_type": "bert",
+  "architectures": [
+    "BertModel"
+  ],
+  "hidden_size": 32,
+  "num_hidden_layers": 2
+}
