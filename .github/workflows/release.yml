@@ -113,17 +113,15 @@ jobs:
             scan --sbom="/w/sbom/purser-${{ matrix.name }}.cdx.json"
 
       # --- Sign + attest by digest (keyless via Fulcio/Rekor) ---
+      # Wrapped in a retry: the public Fulcio/Rekor endpoints occasionally reset
+      # the connection, and a transient blip shouldn't fail a whole release.
       - uses: sigstore/cosign-installer@v3
-      - name: Cosign sign
-        run: cosign sign --yes "${IMAGE}@${DIGEST}"
-        env:
-          IMAGE: ${{ steps.ref.outputs.image }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-      - name: Cosign attest SBOM
+      - name: Cosign sign + attest SBOM
         run: |
-          cosign attest --yes --type cyclonedx \
-            --predicate "sbom/purser-${{ matrix.name }}.cdx.json" \
-            "${IMAGE}@${DIGEST}"
+          retry(){ local n=1; until "$@"; do [ $n -ge 4 ] && { echo "::error::$* failed after 4 attempts"; return 1; }; echo "attempt $n failed; retrying in $((n*10))s..."; sleep $((n*10)); n=$((n+1)); done; }
+          retry cosign sign --yes "${IMAGE}@${DIGEST}"
+          retry cosign attest --yes --type cyclonedx \
+            --predicate "sbom/purser-${{ matrix.name }}.cdx.json" "${IMAGE}@${DIGEST}"
         env:
           IMAGE: ${{ steps.ref.outputs.image }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -179,12 +177,15 @@ jobs:
             | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Push chart (OCI) and cosign-sign
         run: |
-          out=$(helm push "dist/purser-${VERSION}.tgz" \
+          retry(){ local n=1; until "$@"; do [ $n -ge 4 ] && { echo "::error::$* failed after 4 attempts"; return 1; }; echo "attempt $n failed; retrying in $((n*10))s..."; sleep $((n*10)); n=$((n+1)); done; }
+          out=$(retry helm push "dist/purser-${VERSION}.tgz" \
             "oci://ghcr.io/${{ github.repository_owner }}/charts" 2>&1)
           echo "$out"
           digest=$(echo "$out" | awk -F': ' '/Digest:/ {print $2}')
           test -n "$digest" || { echo "::error::could not parse chart digest"; exit 1; }
-          cosign sign --yes \
+          # Retry cosign: the public Fulcio/Rekor endpoints occasionally reset
+          # the connection, and a transient blip shouldn't fail the release.
+          retry cosign sign --yes \
             "ghcr.io/${{ github.repository_owner }}/charts/purser@${digest}"
       - name: Upload chart artifact
         uses: actions/upload-artifact@v4
