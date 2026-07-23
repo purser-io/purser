@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/purser-io/purser/actions/workflows/ci.yml/badge.svg)](https://github.com/purser-io/purser/actions/workflows/ci.yml)
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-&nbsp;![Version](https://img.shields.io/badge/version-0.1.1-informational.svg)
+&nbsp;![Version](https://img.shields.io/badge/version-0.1.2-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
 &nbsp;![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
@@ -53,7 +53,7 @@ scan models against the in-cluster service (rules change via `helm upgrade`, no
 rebuild). Two patterns:
 
 ```bash
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.2 \
   -n purser --create-namespace
 KEY=$(kubectl -n purser get secret purser-auth -o jsonpath='{.data.api-key}' | base64 -d)
 
@@ -417,10 +417,10 @@ with `make base-digest`.
 # Pull the published, signed, multi-arch image (also -hf and -deep variants):
 docker run --rm -v $PWD/models:/models:ro -v $PWD/policies:/policies:ro \
   -e PURSER_POLICY=/policies/strict.yaml -p 8080:8080 \
-  ghcr.io/purser-io/purser:0.1.1
+  ghcr.io/purser-io/purser:0.1.2
 # one-shot CLI scan:
 docker run --rm -v $PWD/models:/models:ro \
-  ghcr.io/purser-io/purser:0.1.1 purser scan /models
+  ghcr.io/purser-io/purser:0.1.2 purser scan /models
 
 # …or build locally: make build (core) · make build-hf · make build-deep → purser:dev
 ```
@@ -474,7 +474,7 @@ Secret, and optional HF-worker + deep-companion subcharts (auto-wired):
 
 ```bash
 # published OCI chart (defaults to the ghcr.io/purser-io/purser images)…
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.1 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.1.2 \
   -n purser --create-namespace
 # …or from a source checkout: helm install purser deploy/helm/purser ...
 helm test purser -n purser
