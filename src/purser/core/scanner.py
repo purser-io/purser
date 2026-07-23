@@ -11,7 +11,7 @@ from purser.core import audit, metrics
 from purser.core.deep import DEEP_FORMATS, deep_enabled, run_deep
 from purser.core.dispatch import scan_file
 from purser.core.findings import FileResult, Finding, ScanReport, Severity, Verdict
-from purser.core.formats import MODEL_EXTS
+from purser.core.formats import MODEL_EXTS, looks_like_binary_model
 from purser.core.policy import Policy
 from purser.core.provenance import resolve as resolve_provenance
 from purser.core.signing import VerificationResult, verify_target
@@ -77,7 +77,16 @@ def iter_scannable(target: Path) -> list[Path]:
             and p.name != "model.json"
             and not is_config_json
         ):
-            continue
+            # Don't trust the extension: a payload disguised under a doc/config
+            # name (e.g. a pickle called README.md) must still be scanned. Peek
+            # the magic bytes before skipping.
+            try:
+                with p.open("rb") as fh:
+                    head = fh.read(16)
+            except OSError:
+                continue
+            if not looks_like_binary_model(head):
+                continue
         files.append(p)
     return files
 

@@ -83,6 +83,29 @@ def _looks_like_safetensors(head: bytes) -> bool:
     return head[8:9] in (b"{", b" ")
 
 
+def _is_strong_pickle(head: bytes) -> bool:
+    """Protocol-2+ pickle: PROTO opcode 0x80 + version byte (2-5). Distinctive
+    enough to override a spoofed extension without false-positiving structured
+    binary formats (ONNX/TF protobuf start 0x08/0x0a, flatbuffers a small
+    offset — never 0x80 followed by 2-5)."""
+    return len(head) > 1 and head[0] == 0x80 and 2 <= head[1] <= 5
+
+
+def looks_like_binary_model(head: bytes) -> bool:
+    """True if the bytes carry the magic of a scannable binary format (or a
+    protocol-2+ pickle). Used to catch a payload hidden under a doc/config
+    extension during a directory walk, where the extension alone would skip it."""
+    if not head:
+        return False
+    if (head.startswith(HDF5_MAGIC) or head.startswith(GGUF_MAGIC)
+            or head[:4] in GGML_MAGICS or head.startswith(NUMPY_MAGIC)
+            or head.startswith(ZIP_MAGIC)):
+        return True
+    if len(head) >= 8 and head[4:8] == TFLITE_ID:
+        return True
+    return _is_strong_pickle(head)
+
+
 def _classify_zip(path: Path) -> ModelFormat:
     suffix = path.suffix.lower()
     if suffix == ".pt2":
@@ -148,6 +171,14 @@ def detect_format(path: Path) -> ModelFormat:
         return ModelFormat.TFLITE
     if head.startswith(ZIP_MAGIC):
         return _classify_zip(path)
+    # Magic beats a spoofed extension: a protocol-2+ pickle renamed
+    # `model.onnx` / `weights.pb` must be scanned as the pickle it is, not waved
+    # through by its claimed format. safetensors' bare length prefix can coincide
+    # with these bytes, so defer to it when the header looks like a real one (its
+    # own scanner flags a genuine malformation).
+    if (_is_strong_pickle(head) and suffix != ".safetensors"
+            and not _looks_like_safetensors(head)):
+        return ModelFormat.JOBLIB if suffix == ".joblib" else ModelFormat.PICKLE
     if suffix == ".safetensors":
         # Route by extension even when the header looks wrong — the
         # safetensors scanner reports the malformation.

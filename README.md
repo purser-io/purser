@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-172%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -24,7 +24,9 @@ enforces **user-defined policies**: restrict models by **country of origin**,
 container images, and Kubernetes manifests.
 
 Nothing is ever deserialized or executed: all analysis is byte- and
-opcode-level.
+opcode-level. Format is detected by **content (magic bytes), not the filename**,
+so renaming a payload to a benign-looking extension doesn't evade the scan — a
+pickle disguised as `model.onnx`, or hidden under a `README.md`, is still caught.
 
 > [!TIP]
 > **New here?** Start with the plain-language [user guides](docs/): one for
