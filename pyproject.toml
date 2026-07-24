@@ -22,7 +22,7 @@ sign = ["cryptography>=42"]
 # Deep companion analyzers (gadget-chain + weight tampering). No extra runtime
 # deps — the analyzers are stdlib-only and reuse the core engines.
 deep = []
-dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.4", "cryptography>=42"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff==0.16.0", "cryptography>=42"]
 
 [project.scripts]
 purser = "purser.cli:main"
@@ -48,3 +48,8 @@ pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# Pin the rule set explicitly (ruff's classic default) so a newer ruff default
+# set can't silently fail CI. Broader sets (bugbear/isort/async) are opt-in later.
+select = ["E4", "E7", "E9", "F"]
