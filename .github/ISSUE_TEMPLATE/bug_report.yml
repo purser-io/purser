@@ -1,0 +1,50 @@
+name: Bug report
+description: A scan result, crash, or behavior that looks wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Not for security issues.** Report vulnerabilities privately via a
+        [security advisory](https://github.com/purser-io/purser/security/advisories/new)
+        (see `SECURITY.md`). For a false positive/negative, attach an **inert**
+        reproducer (e.g. `os.system("true")`) — never live malware.
+  - type: input
+    id: version
+    attributes:
+      label: Purser version
+      placeholder: "0.1.2 (or a git sha)"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      options:
+        - CLI
+        - REST API
+        - Helm chart
+        - Container image
+        - Deep companion (purser-deep)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The command run, the model format involved, and the actual output/verdict.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproducer
+      description: Minimal steps or an inert sample model. Do not attach live malware.

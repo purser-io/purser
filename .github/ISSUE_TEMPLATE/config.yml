@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/purser-io/purser/security/advisories/new
+    about: Do NOT open a public issue for security bugs — file a private advisory (see SECURITY.md).
+  - name: Documentation
+    url: https://github.com/purser-io/purser#readme
+    about: Usage guides, policy reference, and deployment docs.

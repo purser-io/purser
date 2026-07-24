@@ -1,0 +1,38 @@
+# Enforce the Developer Certificate of Origin: every commit in a PR must carry a
+# Signed-off-by trailer (see CONTRIBUTING.md). Self-contained — no third-party
+# action — which suits a security tool.
+name: DCO
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify Signed-off-by on every commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git show -s --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "::error::commit $sha is missing a Signed-off-by line"
+              git show -s --format='  %h %s' "$sha"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Sign off with:  git commit -s   (or: git rebase --signoff $BASE)"
+            exit 1
+          fi
+          echo "All commits are signed off."
