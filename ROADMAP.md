@@ -9,7 +9,7 @@ container images and a signed Helm chart on GHCR, built and published by CI). Th
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, and disguise-resistant format
-detection are all shipped (176 tests). What remains is **not** bug-fixing — it is
+detection are all shipped (181 tests). What remains is **not** bug-fixing — it is
 maturity, reach, and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
