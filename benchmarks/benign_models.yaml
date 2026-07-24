@@ -1,16 +1,32 @@
 # Real, reputable HuggingFace models used as the negative (benign) set for the
 # false-positive rate. These SHOULD scan clean (PASS/WARN); a FAIL/BLOCKED on any
-# is a false positive to root-cause. Kept small/tiny for fast fetches — EXPAND
-# this list (hundreds of models across formats) for a strong FPR estimate.
+# is a false positive to root-cause. All repos below were verified to exist and
+# to ship the noted formats. `fetch_benign.py` resolves each `revision` to a
+# commit SHA and pins it in benign_models.lock.json for reproducibility.
 #
-# `fetch_benign.py` resolves each `revision` to a commit SHA and pins it in
-# benign_models.lock.json for reproducibility.
+# Coverage here: pickle (.bin), safetensors, ONNX, Keras (.h5). Real GGUF / TF
+# SavedModel / CoreML benign samples are large or scarce; the synthetic clean
+# artifacts in kat.py cover those formats for now — expand as tiny examples surface.
+#
+# Kept mostly tiny (KB–low-MB) for fast fetches; a couple of real production
+# models are included for realism. EXPAND this list (hundreds of models) for a
+# statistically strong FPR estimate.
 models:
-  - { repo: hf-internal-testing/tiny-random-gpt2, revision: main, format: pytorch+safetensors }
-  - { repo: hf-internal-testing/tiny-random-bert, revision: main, format: pytorch+safetensors }
-  - { repo: hf-internal-testing/tiny-random-distilbert, revision: main, format: pytorch }
-  - { repo: prajjwal1/bert-tiny, revision: main, format: pytorch }
-  - { repo: google/bert_uncased_L-2_H-128_A-2, revision: main, format: pytorch }
-  - { repo: sshleifer/tiny-gpt2, revision: main, format: pytorch }
-  - { repo: hf-internal-testing/tiny-random-t5, revision: main, format: pytorch }
-  - { repo: hf-internal-testing/tiny-random-RobertaModel, revision: main, format: safetensors }
+  # --- tiny test fixtures (KB): multi-format, fast ---
+  - { repo: hf-internal-testing/tiny-random-gpt2,                        revision: main, format: bin+h5+safetensors }
+  - { repo: hf-internal-testing/tiny-random-bert,                        revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: hf-internal-testing/tiny-random-distilbert,                  revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-t5,                          revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-RobertaModel,                revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: hf-internal-testing/tiny-random-BertForSequenceClassification, revision: main, format: bin+h5+onnx }
+  # --- small real models (low-MB): pickle + safetensors ---
+  - { repo: prajjwal1/bert-tiny,                                         revision: main, format: bin }
+  - { repo: prajjwal1/bert-mini,                                         revision: main, format: bin }
+  - { repo: google/bert_uncased_L-2_H-128_A-2,                           revision: main, format: bin+safetensors }
+  - { repo: sshleifer/tiny-gpt2,                                         revision: main, format: bin+h5 }
+  - { repo: sshleifer/tiny-distilbert-base-cased,                        revision: main, format: bin+h5 }
+  # --- ONNX (transformers.js exports) ---
+  - { repo: Xenova/gpt2,                                                 revision: main, format: onnx }
+  - { repo: Xenova/all-MiniLM-L6-v2,                                     revision: main, format: onnx }
+  # --- one real production model (~90 MB) for realism ---
+  - { repo: sentence-transformers/all-MiniLM-L6-v2,                      revision: main, format: bin+h5+onnx+safetensors }
