@@ -1,0 +1,4 @@
+# generated corpus, downloaded models, and run outputs — never committed
+work/
+results/
+benign_models.lock.json

@@ -19,10 +19,11 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 ## Recommended next (priority order)
 
-1. **Real-world validation + published benchmark.** Purser has adversarial unit
-   fixtures but no measured false-positive/false-negative rates against a corpus
-   of real (and known-malicious) models. Building that harness and publishing the
-   numbers is the highest-leverage credibility step versus peers.
+1. **Real-world validation + published benchmark.** A Phase-1 harness ships in
+   `benchmarks/` (known-answer detection + false-positive rate + latency over
+   inert samples and pinned HuggingFace models). Remaining: expand the benign
+   corpus, add the head-to-head comparison vs peer scanners, publish the numbers,
+   and gate them in scheduled CI.
 2. **External PKI / transparency trust root.** The largest remaining *trust*
    improvement for **model** provenance — move it from operator-asserted keys to a
    verified root (Sigstore Fulcio/Rekor or HuggingFace commit signatures). Note:
