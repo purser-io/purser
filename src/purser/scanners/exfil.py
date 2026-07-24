@@ -280,11 +280,15 @@ class ExfilScanner(Scanner):
             findings.append(self.finding(rule_id, severity, title, detail,
                                          tags=tags, evidence=evidence))
 
-        # Stream over strings (generator) rather than building a full list, and
-        # stop early once the finding cap is hit — bounds memory on hostile input.
+        # Stream over extracted printable strings (generator) and stop once the
+        # finding cap is hit — bounds memory on hostile input. Each pattern group
+        # is gated by the minimum length it could possibly match, so the millions
+        # of short weight-noise runs skip the expensive secret/encoded work.
         for s in iter_strings(data):
             if len(findings) >= MAX_FINDINGS:
                 break
+            n = len(s)
+
             for label, pattern in WEBHOOK_PATTERNS:
                 for m in pattern.finditer(s):
                     add("EXFIL_WEBHOOK", Severity.CRITICAL,
@@ -313,10 +317,10 @@ class ExfilScanner(Scanner):
                         "call-home or reverse-shell behavior.",
                         ["exfiltration", "network"], m.group(), {"endpoint": m.group()})
 
-            # Skip secret matching on high-entropy weight-noise runs — a chance
-            # `hf_...`/`AKIA...`-shaped substring inside binary tensor data is not
-            # a leaked credential. Real secrets live in short, structured strings.
-            if not _is_weighty(s):
+            # Secrets are >=14 chars; skip shorter runs, and skip long
+            # high-entropy weight-noise runs where a chance `hf_...`/`AKIA...`
+            # shape is not a real credential.
+            if n >= 14 and not _is_weighty(s):
                 for label, pattern, sev in SECRET_PATTERNS:
                     for m in pattern.finditer(s):
                         add("EXFIL_SECRET", sev,
@@ -334,37 +338,25 @@ class ExfilScanner(Scanner):
                         ["code-execution"], f"{label}:{m.group()[:60]}",
                         {"indicator": label, "match": m.group()[:200]})
 
-            for m in BASE64_RE.finditer(s):
-                verdict = _decoded_payload_verdict(m.group())
-                if verdict is None:
-                    continue
-                sev, why = verdict
-                add("EXFIL_ENCODED_PAYLOAD", sev,
-                    f"Base64 blob in model data ({why})",
-                    "Long base64 strings that decode cleanly to text are a "
-                    "common obfuscation layer for payloads or staged data.",
-                    ["obfuscation"], m.group()[:48], {"reason": why, "sample": m.group()[:96]})
-
-            for m in HEX_RE.finditer(s):
-                verdict = _decoded_hex_verdict(m.group())
-                if verdict is None:
-                    continue
-                sev, why = verdict
-                add("EXFIL_ENCODED_PAYLOAD", sev,
-                    f"Hex-encoded blob in model data ({why})",
-                    "Long hex strings that decode cleanly to text are a common "
-                    "obfuscation layer for payloads or staged data.",
-                    ["obfuscation"], m.group()[:48], {"reason": why, "sample": m.group()[:96]})
-
-            for m in BASE32_RE.finditer(s):
-                verdict = _decoded_b32_verdict(m.group())
-                if verdict is None:
-                    continue
-                sev, why = verdict
-                add("EXFIL_ENCODED_PAYLOAD", sev,
-                    f"Base32-encoded blob in model data ({why})",
-                    "Long base32 strings that decode cleanly to text are a common "
-                    "obfuscation layer for payloads or staged data.",
-                    ["obfuscation"], m.group()[:48], {"reason": why, "sample": m.group()[:96]})
+            # Encoded blobs are >=64 chars — only the (comparatively few) long
+            # runs are worth the regex + decode cost.
+            if n >= 64:
+                for regex, decode, kind in (
+                    (BASE64_RE, _decoded_payload_verdict, "Base64"),
+                    (HEX_RE, _decoded_hex_verdict, "Hex-encoded"),
+                    (BASE32_RE, _decoded_b32_verdict, "Base32-encoded"),
+                ):
+                    for m in regex.finditer(s):
+                        verdict = decode(m.group())
+                        if verdict is None:
+                            continue
+                        sev, why = verdict
+                        add("EXFIL_ENCODED_PAYLOAD", sev,
+                            f"{kind} blob in model data ({why})",
+                            f"Long {kind.lower()} strings that decode cleanly to "
+                            "text are a common obfuscation layer for payloads or "
+                            "staged data.",
+                            ["obfuscation"], m.group()[:48],
+                            {"reason": why, "sample": m.group()[:96]})
 
         return findings
