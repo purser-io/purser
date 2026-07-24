@@ -68,6 +68,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Item | Notes |
 |---|---|
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
+| Exfil scan latency on huge models | Length-gating cut ~30%, but a multi-hundred-MB weight file still takes ~20 s (printable-string extraction over the whole blob). Options: scan structural/metadata regions only, or a lower default per-file byte cap. |
 | `PrometheusRule` alerts | Ship alert rules to pair with the Grafana dashboard (spike in FAIL/BLOCKED, `DEEP_UNAVAILABLE`, error rate). |
 
 ## Candidates — distribution / UX
