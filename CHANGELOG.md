@@ -5,6 +5,11 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
+## [Unreleased]
+### Added
+- Ship a `py.typed` marker (PEP 561) so type checkers pick up Purser's type
+  hints; add project URLs to the package metadata; `CITATION.cff`.
+
 ## [0.1.2] - 2026-07-23
 ### Fixed
 - **Resist extension/name disguise.** Magic bytes now beat a spoofed extension:

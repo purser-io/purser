@@ -27,6 +27,12 @@ dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.4", "cryptography>=42"]
 [project.scripts]
 purser = "purser.cli:main"
 
+[project.urls]
+Homepage = "https://purser-io.io"
+Repository = "https://github.com/purser-io/purser"
+Changelog = "https://github.com/purser-io/purser/blob/main/CHANGELOG.md"
+Issues = "https://github.com/purser-io/purser/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
