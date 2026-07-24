@@ -44,7 +44,6 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Item | Notes |
 |---|---|
 | **External PKI / transparency trust root** | Model signing today is Ed25519 + a local trust store binding key→publisher→country — integrity and key-attested identity, but the key→identity binding is an operator assertion. Integrate Sigstore (Fulcio/Rekor) or HuggingFace commit-signature verification so identity derives from a verified external root. |
-| **Wolfi base auto-refresh** | Drift *detection* ships (`wolfi-base-check.yml` compares the pinned digest to live `:latest` weekly and opens an issue). Remaining: automatically rebuild + `trivy`-scan + open a PR on drift, rather than a manual `make base-digest` bump. |
 
 ## Candidates — detection depth
 
@@ -69,6 +68,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 |---|---|
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
 | Exfil scan latency on huge models | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats, or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
+| Wolfi base auto-refresh | Drift *detection* already ships (weekly `wolfi-base-check.yml` opens an issue on a stale digest). Nice-to-have: auto-rebuild + `trivy` + open a PR, vs. today's manual `make base-digest` bump. |
 | `PrometheusRule` alerts | Ship alert rules to pair with the Grafana dashboard (spike in FAIL/BLOCKED, `DEEP_UNAVAILABLE`, error rate). |
 
 ## Candidates — distribution / UX
