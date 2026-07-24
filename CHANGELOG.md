@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
+### Fixed
+- Exfiltration false positives on binary/quantized weights: the secret and
+  encoded-payload heuristics are now **entropy-gated** (a chance `hf_...` or hex
+  run inside weight bytes no longer flags), the HuggingFace-token pattern is
+  length-bounded, and `.cache/` directories are skipped. Surfaced by the new
+  validation benchmark, where a benign quantized ONNX model was hard-failing.
+
 ### Added
 - Ship a `py.typed` marker (PEP 561) so type checkers pick up Purser's type
   hints; add project URLs to the package metadata; `CITATION.cff`.

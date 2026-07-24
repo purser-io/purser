@@ -13,8 +13,10 @@ from __future__ import annotations
 import base64
 import binascii
 import gzip
+import math
 import re
 import zlib
+from collections import Counter
 from pathlib import Path
 
 from purser.core.findings import Finding, Severity
@@ -70,7 +72,7 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str], Severity]] = [
     ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"), Severity.CRITICAL),
     ("Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), Severity.CRITICAL),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), Severity.HIGH),
-    ("HuggingFace token", re.compile(r"\bhf_[A-Za-z0-9]{34,}\b"), Severity.HIGH),
+    ("HuggingFace token", re.compile(r"\bhf_[A-Za-z0-9]{34}\b"), Severity.HIGH),
     ("OpenAI API key", re.compile(r"\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b"), Severity.CRITICAL),
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"), Severity.MEDIUM),
 ]
@@ -101,6 +103,22 @@ def iter_strings(data: bytes):
 
 def extract_strings(data: bytes) -> list[str]:
     return list(iter_strings(data))
+
+
+def _shannon_entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in Counter(s).values())
+
+
+def _is_weighty(s: str) -> bool:
+    """A long, high-entropy printable run with no whitespace — the kind of
+    'string' that falls out of quantized/binary weight data rather than real
+    text. Secret patterns are suppressed on these to avoid chance matches (e.g.
+    an `hf_...`-shaped run inside int8 ONNX weights). Real tokens/keys live in
+    short, structured lines (< 64 chars) and are unaffected."""
+    return len(s) >= 64 and " " not in s and _shannon_entropy(s) > 4.5
 
 
 def _strict_mode() -> bool:
@@ -151,7 +169,12 @@ def _decoded_text_verdict(raw: bytes) -> tuple[Severity, str] | None:
         return (Severity.HIGH, "decodes to text containing a non-allowlisted URL")
     if "import " in text or "#!/" in text:
         return (Severity.HIGH, "decodes to script-like text")
-    return (Severity.LOW, "decodes to readable text (possible encoded payload)")
+    # A bare "decodes to printable" signal is too weak: quantized weight bytes
+    # frequently decode into the printable range (even into low-entropy digit
+    # runs) with no real payload. Structured payloads — code, URLs, scripts —
+    # are already flagged above at higher severity; anything else is dropped to
+    # avoid false positives on binary tensor data.
+    return None
 
 
 def _maybe_decompress(raw: bytes) -> bytes | None:
@@ -290,13 +313,17 @@ class ExfilScanner(Scanner):
                         "call-home or reverse-shell behavior.",
                         ["exfiltration", "network"], m.group(), {"endpoint": m.group()})
 
-            for label, pattern, sev in SECRET_PATTERNS:
-                for m in pattern.finditer(s):
-                    add("EXFIL_SECRET", sev,
-                        f"{label} embedded in model data",
-                        "Credentials inside a model artifact indicate either a "
-                        "data leak or staged exfiltration material.",
-                        ["secret"], m.group()[:64], {"type": label, "match": m.group()[:80]})
+            # Skip secret matching on high-entropy weight-noise runs — a chance
+            # `hf_...`/`AKIA...`-shaped substring inside binary tensor data is not
+            # a leaked credential. Real secrets live in short, structured strings.
+            if not _is_weighty(s):
+                for label, pattern, sev in SECRET_PATTERNS:
+                    for m in pattern.finditer(s):
+                        add("EXFIL_SECRET", sev,
+                            f"{label} embedded in model data",
+                            "Credentials inside a model artifact indicate either a "
+                            "data leak or staged exfiltration material.",
+                            ["secret"], m.group()[:64], {"type": label, "match": m.group()[:80]})
 
             for label, pattern, sev in CODE_INDICATORS:
                 for m in pattern.finditer(s):

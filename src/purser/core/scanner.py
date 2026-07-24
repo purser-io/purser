@@ -44,7 +44,7 @@ def _signature_findings(result: VerificationResult) -> list[Finding]:
         evidence={"key_id": result.key_id, "status": result.status},
     )]
 
-SKIP_NAMES = {".git", ".DS_Store", "__pycache__"}
+SKIP_NAMES = {".git", ".DS_Store", "__pycache__", ".cache"}
 # Files never worth scanning as models but common in model repos.
 SKIP_EXTS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".cfg", ".gitattributes",
              ".png", ".jpg", ".jpeg", ".gif", ".svg", ".license"}
