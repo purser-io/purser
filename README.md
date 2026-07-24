@@ -523,10 +523,11 @@ pytest
 
 ## Roadmap and security posture
 
+- [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one shipped.
+- [`ROADMAP.md`](ROADMAP.md) — what's next and why (external PKI trust root,
+  deeper per-format detection, an enforcement webhook, Wolfi base auto-refresh).
 - [`SECURITY.md`](SECURITY.md) — disclosure policy + SME security evaluation of
   the code and container images (threat model, hardening, residual risk).
-- [`ROADMAP.md`](ROADMAP.md) — deferred/future work (including periodic Wolfi
-  base-digest refresh, an external PKI trust root, and deeper detection).
 
 ## Contributing
 
