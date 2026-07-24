@@ -68,7 +68,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Item | Notes |
 |---|---|
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
-| Exfil scan latency on huge models | Length-gating cut ~30%, but a multi-hundred-MB weight file still takes ~20 s (printable-string extraction over the whole blob). Options: scan structural/metadata regions only, or a lower default per-file byte cap. |
+| Exfil scan latency on huge models | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats, or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
 | `PrometheusRule` alerts | Ship alert rules to pair with the Grafana dashboard (spike in FAIL/BLOCKED, `DEEP_UNAVAILABLE`, error rate). |
 
 ## Candidates — distribution / UX
