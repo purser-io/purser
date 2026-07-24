@@ -32,9 +32,9 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 4. **Enforcement primitive.** A Kubernetes `ValidatingAdmissionWebhook` or CI
    action that *enforces* the verdict (+ hash pinning) at deploy time, closing the
    scan→deploy TOCTOU gap.
-5. **Repo & community hygiene.** Now that the project is public: `CONTRIBUTING.md`,
-   `CODE_OF_CONDUCT.md`, issue/PR templates, `CITATION.cff`, a `py.typed` marker,
-   and a real security contact.
+5. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
+   of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
+   is a CNCF Landscape entry and an OpenSSF Best Practices badge.
 
 ---
 
@@ -74,7 +74,6 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Item | Notes |
 |---|---|
 | Kubernetes admission controller / CI plugin | See *Enforcement primitive* above — a webhook/action enforcing verdicts + hash pinning at deploy time. |
-| Foundation / landscape | Consider a CNCF Landscape entry and an OpenSSF Best Practices badge now that the repo is public. |
 
 ## Out of scope
 
@@ -106,6 +105,9 @@ for per-release detail):
   pipeline; **PyPI** publishing via OIDC Trusted Publishing; public multi-arch
   **signed** container images (core / HF / deep) and a **signed** Helm chart on
   GHCR (OCI); CodeQL + dependency-review; `CHANGELOG.md`; a `demo/` sandbox.
+- **Community & governance:** `CONTRIBUTING.md`, a Contributor Covenant Code of
+  Conduct, bug/feature issue forms + a PR template, an **enforced DCO** sign-off
+  check, `CITATION.cff`, a `py.typed` marker, and package `[project.urls]`.
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.
