@@ -50,6 +50,12 @@ from purser.core.env import env_get
 
 _log = logging.getLogger("purser.admission")
 
+
+def _scrub(value: object) -> str:
+    """Neutralize CR/LF/control chars in untrusted text before logging it, so a
+    crafted request field can't forge or inject log lines. Bounded length."""
+    return re.sub(r"[\x00-\x1f\x7f]", "?", str(value))[:256]
+
 app = FastAPI(title="Purser admission webhook", version=__version__,
               description="Enforces scan verdicts + image digest pinning at deploy time")
 
@@ -225,7 +231,7 @@ def evaluate(review: dict) -> dict:
     except Exception:  # pragma: no cover - defensive
         # Log the detail server-side; never leak exception text back to the API
         # server / client in the admission response.
-        _log.exception("admission check errored for uid %s", uid)
+        _log.exception("admission check errored for uid %s", _scrub(uid))
         allowed = _fail_open()
         return _response(
             uid, allowed,
