@@ -36,7 +36,8 @@ rotate on `helm upgrade`).
 | API-key Secret (generated/retained) | HPA (`autoscaling.enabled`) |
 | PodDisruptionBudget, topology spread | Ingress (`ingress.enabled`) |
 | Prometheus scrape annotations | ServiceMonitor (`metrics.serviceMonitor.enabled`) |
-| Hardened pod/container securityContext | NetworkPolicy (`networkPolicy.enabled`) |
+| Hardened pod/container securityContext | PrometheusRule alerts (`metrics.prometheusRule.enabled`) |
+| — | NetworkPolicy (`networkPolicy.enabled`) |
 
 Hardening applied to every workload: non-root `10001:10001`, read-only root FS,
 all capabilities dropped, `seccompProfile: RuntimeDefault`, no privilege
@@ -55,6 +56,7 @@ liveness/readiness/startup probes on `/healthz`.
 | `config.rateLimitRpm` | `0` | per-client rate limit (0 = off) |
 | `audit.mode` | `off` | `stdout` / `syslog` for SIEM |
 | `metrics.serviceMonitor.enabled` | `false` | Prometheus Operator |
+| `metrics.prometheusRule.enabled` | `false` | starter alert set (Prometheus Operator) |
 | `modelStore.enabled` | `false` | mount a PVC for `/v1/scan/path` |
 | `deep.enabled` / `hf.enabled` | `false` | optional companions |
 

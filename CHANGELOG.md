@@ -5,6 +5,10 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
+## [Unreleased]
+### Added
+- Helm chart: an optional **PrometheusRule** alert set (`metrics.prometheusRule.enabled`) — target-down, scan errors (incl. deep-companion unavailable), FAIL/BLOCKED spike, policy blocks, load-shedding, and auth-failure spikes, wired to the existing `/metrics` series.
+
 ## [0.1.3] - 2026-07-24
 ### Fixed
 - Exfiltration false positives on binary/quantized weights: the secret and

@@ -1,0 +1,83 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "purser.fullname" . }}
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: purser
+      rules:
+        # Liveness: no build_info series means the scanner isn't being scraped
+        # (crashed, unschedulable, or /metrics disabled).
+        - alert: PurserDown
+          expr: absent(purser_build_info)
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Purser is not exposing metrics"
+            description: "No purser_build_info series for 10m — the scan service is down or not being scraped."
+
+        # Scanner/analyzer errors, incl. DEEP_UNAVAILABLE when the deep companion
+        # is enabled but unreachable (both roll into purser_scan_errors_total).
+        - alert: PurserScanErrors
+          expr: sum(rate(purser_scan_errors_total[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Purser is emitting scan errors"
+            description: "purser_scan_errors_total is increasing — scanner/analyzer errors, or the deep companion is enabled but unreachable (DEEP_UNAVAILABLE)."
+
+        # A sustained spike in FAIL/BLOCKED verdicts: a bad model drop, a policy
+        # misconfiguration, or an attack against the gate.
+        - alert: PurserHighFailBlockRate
+          expr: |
+            sum(rate(purser_scans_total{verdict=~"FAIL|BLOCKED"}[15m]))
+              / clamp_min(sum(rate(purser_scans_total[15m])), 1)
+              > {{ .Values.metrics.prometheusRule.failBlockRatio }}
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High share of scans failing or blocked"
+            description: "More than a {{ .Values.metrics.prometheusRule.failBlockRatio }} fraction of scans in the last 15m returned FAIL/BLOCKED."
+
+        # Informational: a model was rejected by policy (origin/format/publisher/
+        # name or require_signed). Tune or silence if routine in your pipeline.
+        - alert: PurserPolicyBlocked
+          expr: sum(increase(purser_policy_blocks_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: info
+          annotations:
+            summary: "A model was blocked by policy"
+            description: "purser_policy_blocks_total increased in the last 15m — a model was rejected by policy."
+
+        # Load-shedding: requests rejected for capacity/rate-limit -> saturated.
+        - alert: PurserSaturation
+          expr: sum(rate(purser_requests_rejected_total{reason=~"capacity|rate_limit"}[10m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Purser is shedding load"
+            description: "Requests are being rejected (capacity/rate_limit) — scale replicas or raise config.maxConcurrentScans / config.rateLimitRpm."
+
+        # Elevated auth rejections — possible credential brute-force or a
+        # misconfigured client.
+        - alert: PurserAuthFailureSpike
+          expr: sum(rate(purser_requests_rejected_total{reason="auth"}[5m])) > {{ .Values.metrics.prometheusRule.authRejectsPerSec }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Elevated authentication failures"
+            description: "Auth rejections above {{ .Values.metrics.prometheusRule.authRejectsPerSec }}/s for 10m — possible credential brute-force or a misconfigured client."
+{{- end }}

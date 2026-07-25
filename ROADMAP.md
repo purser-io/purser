@@ -70,7 +70,6 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
 | Exfil scan latency on huge models | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats, or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
 | Wolfi base auto-refresh | Drift *detection* already ships (weekly `wolfi-base-check.yml` opens an issue on a stale digest). Nice-to-have: auto-rebuild + `trivy` + open a PR, vs. today's manual `make base-digest` bump. |
-| `PrometheusRule` alerts | Ship alert rules to pair with the Grafana dashboard (spike in FAIL/BLOCKED, `DEEP_UNAVAILABLE`, error rate). |
 
 ## Candidates — distribution / UX
 
@@ -125,4 +124,5 @@ for per-release detail):
   multi-arch `buildx` with SLSA provenance + SBOM attestations, cosign signing.
 - **Observability:** Prometheus `/metrics` (built-in registry) with
   security-domain series + an importable Grafana dashboard, and a structured JSON
-  **audit log** to syslog/stdout (`PURSER_AUDIT`).
+  **audit log** to syslog/stdout (`PURSER_AUDIT`)
+- **Alerting:** an optional Helm `PrometheusRule` starter set (target-down, scan errors incl. deep-unavailable, FAIL/BLOCKED spike, load-shedding, auth-failure spikes).

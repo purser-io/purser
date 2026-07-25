@@ -77,6 +77,12 @@ metrics:
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+  # Prometheus Operator PrometheusRule with a starter alert set (needs the CRD).
+  prometheusRule:
+    enabled: false
+    labels: {}               # extra labels for your Prometheus ruleSelector (e.g. release: kube-prometheus-stack)
+    failBlockRatio: 0.2      # PurserHighFailBlockRate fires above this FAIL+BLOCKED share of scans
+    authRejectsPerSec: 0.2   # PurserAuthFailureSpike fires above this auth-rejection rate (/s)
 
 service:
   type: ClusterIP
