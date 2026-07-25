@@ -8,6 +8,7 @@ GitHub notes are generated automatically; this file is the curated summary.
 ## [Unreleased]
 ### Added
 - Helm chart: an optional **PrometheusRule** alert set (`metrics.prometheusRule.enabled`) — target-down, scan errors (incl. deep-companion unavailable), FAIL/BLOCKED spike, policy blocks, load-shedding, and auth-failure spikes, wired to the existing `/metrics` series.
+- **TensorRT** engine recognition: `.engine`/`.plan`/`.trt` are now identified as a `tensorrt` format (data-only/opaque, like OpenVINO/MXNet) so policy can allow/deny them and reports name them; the format-agnostic exfiltration scan runs over their bytes. Deep graph parsing remains a roadmap candidate.
 
 ## [0.1.3] - 2026-07-24
 ### Fixed

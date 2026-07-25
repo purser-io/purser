@@ -120,7 +120,7 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | HF config | `config.json`, `*_config.json` | `auto_map` / `custom_pipelines` / `trust_remote_code` keys that arm remote-code execution, linked to the referenced source files |
 | NumPy | `.npy` `.npz` | Object-dtype arrays (embedded pickles) — payload scanned recursively |
 | Archives | `.zip` `.tar` `.gz` | Zip-slip path traversal, zip bombs, recursive member scanning (depth-capped) |
-| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, OpenVINO IR, XGBoost `.ubj`, CatBoost `.cbm` | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies |
+| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, OpenVINO IR, XGBoost `.ubj`, CatBoost `.cbm`, TensorRT `.engine`/`.plan`/`.trt` | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies |
 | **Exfiltration engine** | *all files* | Webhook endpoints (Slack/Discord/Telegram), hard-coded IP:port, non-allowlisted URLs, cloud/API credentials (AWS, GitHub, HF, OpenAI, private keys, JWTs), embedded source with network/exec/shell idioms, base64/hex/**base32**-encoded payloads (decoded and re-analyzed, incl. one **gzip/zlib** layer), and **UTF-16 (wide) strings** that hide indicators from ASCII scans. Scans in bounded windows with a per-file finding cap; benign-host allowlist is configurable/strict-able (see env table). |
 
 ## How Purser compares

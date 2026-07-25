@@ -64,6 +64,7 @@ def scanners_for(fmt: ModelFormat, depth: int = 0) -> list[Scanner]:
         ModelFormat.MXNET: [],
         ModelFormat.OPENVINO: [],
         ModelFormat.GBM_NATIVE: [],
+        ModelFormat.TENSORRT: [],
         ModelFormat.ARCHIVE: [ArchiveScanner(depth=depth)],
         ModelFormat.UNKNOWN: [],
     }

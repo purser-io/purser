@@ -34,6 +34,7 @@ class ModelFormat(str, enum.Enum):
     OPENVINO = "openvino"          # OpenVINO IR .xml
     PMML = "pmml"
     GBM_NATIVE = "gbm_native"      # XGBoost .ubj, CatBoost .cbm, ...
+    TENSORRT = "tensorrt"          # serialized TensorRT engine (.engine/.plan/.trt)
     PYTHON_SOURCE = "python_source"  # bundled .py (trust_remote_code)
     HF_CONFIG = "hf_config"        # config.json etc. (auto_map)
     ARCHIVE = "archive"
@@ -53,6 +54,7 @@ MODEL_EXTS = PICKLE_EXTS | {
     ".h5", ".hdf5", ".keras", ".onnx", ".safetensors", ".gguf", ".ggml",
     ".npy", ".npz", ".pb", ".tflite", ".pte", ".pt2", ".mlmodel", ".skops",
     ".pdmodel", ".params", ".msgpack", ".flax", ".ubj", ".cbm", ".pmml",
+    ".engine", ".plan", ".trt",
     ".zip", ".tar", ".gz", ".tgz",
 }
 
@@ -201,6 +203,8 @@ def detect_format(path: Path) -> ModelFormat:
         return ModelFormat.MXNET
     if suffix in (".ubj", ".cbm"):
         return ModelFormat.GBM_NATIVE
+    if suffix in (".engine", ".plan", ".trt"):   # serialized TensorRT engine
+        return ModelFormat.TENSORRT
     if suffix == ".onnx":
         return ModelFormat.ONNX
     if suffix == ".pb" or path.name == "saved_model.pb":
