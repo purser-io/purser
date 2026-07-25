@@ -1,0 +1,19 @@
+{{- if .Values.admission.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "purser.fullname" . }}-admission
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "purser.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+{{- end }}

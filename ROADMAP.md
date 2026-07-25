@@ -8,9 +8,10 @@ Purser is released and installable (**v0.1.3** — on PyPI, with signed multi-ar
 container images and a signed Helm chart on GHCR, built and published by CI). The
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
-`trust_remote_code` engines, observability, and disguise-resistant format
-detection are all shipped (181 tests). What remains is **not** bug-fixing — it is
-maturity, reach, and depth. See *Recently shipped* at the bottom.
+`trust_remote_code` engines, observability, disguise-resistant format detection,
+deploy-time admission enforcement, and a gated validation benchmark are all
+shipped (201 tests). What remains is **not** bug-fixing — it is maturity, reach,
+and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
 undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
@@ -19,22 +20,20 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 ## Recommended next (priority order)
 
-1. **Real-world validation + published benchmark.** A Phase-1 harness ships in
-   `benchmarks/` (known-answer detection + false-positive rate + latency over
-   inert samples and pinned HuggingFace models). Remaining: expand the benign
-   corpus, add the head-to-head comparison vs peer scanners, publish the numbers,
-   and gate them in scheduled CI.
+1. **Real-world validation + published benchmark.** A Phase-1 harness (known-answer
+   detection + false-positive rate + latency), a Phase-2 head-to-head comparison
+   vs picklescan / Fickling / ModelScan / ModelAudit (`benchmarks/compare.py`),
+   and a **scheduled CI job that gates on regression** (detection floor / FPR
+   ceiling) all ship in `benchmarks/`, with numbers published in
+   `benchmarks/README.md`. Remaining: an adversarial **evasion suite** (Phase 3)
+   and continued growth of the real-model corpus + trend publication.
 2. **External PKI / transparency trust root.** The largest remaining *trust*
    improvement for **model** provenance — move it from operator-asserted keys to a
    verified root (Sigstore Fulcio/Rekor or HuggingFace commit signatures). Note:
    Purser's own *artifacts* are already cosign-keyless-signed via Fulcio/Rekor.
 3. **Per-format scanner depth (TensorRT, OpenVINO, non-`Lambda` Keras).** Closes
    the one area where the OSS peer **ModelAudit** leads (per the comparison chart).
-4. **Enforcement primitive.** A GitHub Actions CI action ships (`action.yml` —
-   gates the job on the verdict). Remaining: a Kubernetes
-   `ValidatingAdmissionWebhook` enforcing the verdict (+ hash pinning) at *deploy*
-   time, closing the scan→deploy TOCTOU gap.
-5. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
+4. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
 
@@ -75,7 +74,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 | Item | Notes |
 |---|---|
-| Kubernetes admission controller / CI plugin | See *Enforcement primitive* above — a webhook/action enforcing verdicts + hash pinning at deploy time. |
+| Admission-webhook depth | The `ValidatingAdmissionWebhook` (shipped) enforces image-digest pinning + approved-model digests at deploy time. Next: a controller that *populates* the approved-digest set automatically from scan results (today it is operator-managed via the ConfigMap / GitOps), and optional cosign attestation verification instead of a digest allowlist. |
 
 ## Out of scope
 
@@ -110,8 +109,13 @@ for per-release detail):
 - **Community & governance:** `CONTRIBUTING.md`, a Contributor Covenant Code of
   Conduct, bug/feature issue forms + a PR template, an **enforced DCO** sign-off
   check, `CITATION.cff`, a `py.typed` marker, and package `[project.urls]`.
-- **CI enforcement action:** a composite GitHub Action (`action.yml`) runs a
-  scan and gates the job on the policy verdict.
+- **Deploy-time enforcement:** a composite GitHub Action (`action.yml`) gates a
+  CI job on the policy verdict, **and** a Kubernetes `ValidatingAdmissionWebhook`
+  (`purser.admission`, Helm `admission.enabled`) enforces image-digest pinning +
+  approved-model digests at admission — closing the scan→deploy TOCTOU gap.
+- **Validation benchmark:** a known-answer + real-model harness, a peer-scanner
+  head-to-head comparison, and a scheduled CI job that gates on detection/FPR
+  regression (`benchmarks/`).
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.

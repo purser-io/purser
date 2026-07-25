@@ -103,7 +103,8 @@ jobs:
             --set networkPolicy.enabled=true \
             --set podDisruptionBudget.enabled=true \
             --set metrics.serviceMonitor.enabled=true \
-            --set metrics.prometheusRule.enabled=true > /dev/null
+            --set metrics.prometheusRule.enabled=true \
+            --set admission.enabled=true > /dev/null
 
   docker:
     name: docker build (${{ matrix.name }})

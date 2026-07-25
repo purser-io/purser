@@ -1,0 +1,71 @@
+{{- if .Values.admission.enabled -}}
+{{- $fullname := include "purser.fullname" . -}}
+{{- $svc := printf "%s-admission" $fullname -}}
+{{- $ns := .Release.Namespace -}}
+{{- $cn := printf "%s.%s.svc" $svc $ns -}}
+{{- $altNames := list $cn (printf "%s.%s.svc.cluster.local" $svc $ns) -}}
+{{- $secretName := printf "%s-admission-tls" $fullname -}}
+{{/* Reuse the existing cert across upgrades (kept via resource-policy), so the
+     caBundle stays valid; generate a fresh self-signed CA + serving cert only
+     on first install (or under `helm template`, which has no cluster lookup). */}}
+{{- $existing := lookup "v1" "Secret" $ns $secretName -}}
+{{- $crt := "" -}}{{- $key := "" -}}{{- $ca := "" -}}
+{{- if and $existing $existing.data (index $existing.data "tls.crt") -}}
+{{- $crt = index $existing.data "tls.crt" -}}
+{{- $key = index $existing.data "tls.key" -}}
+{{- $ca = index $existing.data "ca.crt" | default $crt -}}
+{{- else -}}
+{{- $caCert := genCA (printf "%s-ca" $svc) 3650 -}}
+{{- $cert := genSignedCert $cn (list) $altNames 3650 $caCert -}}
+{{- $crt = $cert.Cert | b64enc -}}
+{{- $key = $cert.Key | b64enc -}}
+{{- $ca = $caCert.Cert | b64enc -}}
+{{- end -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+  annotations:
+    # keep the serving cert stable across upgrades (don't rotate the caBundle)
+    helm.sh/resource-policy: keep
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ $crt }}
+  tls.key: {{ $key }}
+  ca.crt: {{ $ca }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ $fullname }}-admission
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+webhooks:
+  - name: validate.purser.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    matchPolicy: Equivalent
+    failurePolicy: {{ .Values.admission.failurePolicy }}
+    timeoutSeconds: {{ .Values.admission.timeoutSeconds }}
+    clientConfig:
+      service:
+        name: {{ $svc }}
+        namespace: {{ $ns }}
+        path: /validate
+        port: 443
+      caBundle: {{ $ca }}
+    {{- with .Values.admission.namespaceSelector }}
+    namespaceSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.admission.objectSelector }}
+    objectSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    rules:
+      {{- toYaml .Values.admission.rules | nindent 6 }}
+{{- end }}

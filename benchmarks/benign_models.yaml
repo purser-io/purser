@@ -25,8 +25,27 @@ models:
   - { repo: google/bert_uncased_L-2_H-128_A-2,                           revision: main, format: bin+safetensors }
   - { repo: sshleifer/tiny-gpt2,                                         revision: main, format: bin+h5 }
   - { repo: sshleifer/tiny-distilbert-base-cased,                        revision: main, format: bin+h5 }
+  # --- more tiny-random fixtures: broaden architecture/format coverage ---
+  - { repo: hf-internal-testing/tiny-random-gpt_neo,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-LlamaForCausalLM,            revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-BartModel,                   revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-ViTModel,                    revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-CLIPModel,                   revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-Wav2Vec2Model,              revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-DebertaV2Model,              revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-ElectraModel,                revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-MobileBertModel,             revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-albert,                             revision: main, format: bin+h5 }
   # --- ONNX (transformers.js exports) ---
   - { repo: Xenova/gpt2,                                                 revision: main, format: onnx }
   - { repo: Xenova/all-MiniLM-L6-v2,                                     revision: main, format: onnx }
+  - { repo: Xenova/distilgpt2,                                           revision: main, format: onnx }
+  - { repo: Xenova/bert-base-uncased,                                    revision: main, format: onnx }
+  # --- small real models (low-MB): more pickle + safetensors ---
+  - { repo: prajjwal1/bert-small,                                        revision: main, format: bin }
+  - { repo: prajjwal1/bert-medium,                                       revision: main, format: bin }
+  - { repo: google/bert_uncased_L-4_H-256_A-4,                           revision: main, format: bin+safetensors }
+  - { repo: distilbert-base-uncased,                                     revision: main, format: bin+safetensors }
   # --- one real production model (~90 MB) for realism ---
   - { repo: sentence-transformers/all-MiniLM-L6-v2,                      revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: sentence-transformers/paraphrase-MiniLM-L3-v2,               revision: main, format: bin+safetensors }

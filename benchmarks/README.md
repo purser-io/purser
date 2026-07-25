@@ -9,9 +9,12 @@ samples across the claimed attack classes, a **synthetic-benign** set, and an
 optional **real-model** negative set pulled from HuggingFace. No live malware is
 generated or committed.
 
-Later phases (see `ROADMAP.md`): head-to-head comparison vs picklescan / Fickling
-/ ModelScan / ModelAudit (Phase 2), an adversarial evasion suite (Phase 3), and
-scheduled-CI publication with regression gates (Phase 4).
+**Phase 2** (this): a head-to-head comparison vs picklescan / Fickling /
+ModelScan / ModelAudit over the same corpus (`compare.py`). **Phase 4** (this):
+scheduled CI (`.github/workflows/benchmark.yml`) runs the corpus weekly and
+**gates on regression** — a drop in known-answer detection or a rise in the
+benign FPR fails the job. Remaining: an adversarial evasion suite (Phase 3) and
+a growing real-model corpus.
 
 ## Run it
 
@@ -23,9 +26,16 @@ python benchmarks/run.py                 # KAT + any fetched benign models
 uv pip install -e ".[hf]"
 python benchmarks/fetch_benign.py        # pins commit shas -> benign_models.lock.json
 python benchmarks/run.py
+
+# regression gate (what scheduled CI runs):
+python benchmarks/run.py --min-tpr 100 --max-fpr 0   # exit 1 on regression
+
+# head-to-head vs peers (install any subset; missing ones show n/a):
+pip install picklescan modelscan fickling modelaudit
+python benchmarks/compare.py             # -> results/comparison.md
 ```
 
-Outputs `benchmarks/results/report.md` and `results.json` (both gitignored).
+Outputs `benchmarks/results/{report,comparison}.md` and `results.json` (all gitignored).
 
 ## What it measures
 
@@ -35,6 +45,37 @@ Outputs `benchmarks/results/report.md` and `results.json` (both gitignored).
 | **False-positive rate** | Benign models hard-failed (`FAIL`/`BLOCKED`). **The meaningful quality signal** — any FP is a bug to fix. `WARN` is tracked separately (advisory). |
 | **Latency p50/p95** | Per-target scan time. |
 | Per-attack-class / per-format | Where detection fires (and where it doesn't). |
+
+## Latest measured
+
+Snapshot from a local run on **2026-07-25** (default policy, 12 known-answer
+malicious + 18 benign incl. 14 real HuggingFace models). Reproduce with the
+commands above; the scheduled CI job re-measures weekly.
+
+| Metric | Value |
+|---|---|
+| Detection (TPR) on known-answer set | **100%** (12/12) |
+| False-positive rate (benign hard-failed) | **0%** (0/18) |
+| Scan latency p50 | ~1 ms (large real models dominate the tail) |
+
+Head-to-head over the known-answer corpus (`compare.py`, peer versions
+picklescan 1.0.5 · ModelScan 0.8.8 · Fickling 0.1.12 · ModelAudit):
+
+| Scanner | Detected (of attempted) | Missed | Not attempted | Benign FP |
+|---|---|---|---|---|
+| **Purser** | 12/12 (100%) | 0 | 0 | 0/4 |
+| picklescan | 5/12 (42%) | 7 | 0 | 0/4 |
+| ModelScan | 2/3 (67%) | 1 | 9 | 0/2 |
+| Fickling | 7/7 (100%) | 0 | 5 | 1/2 |
+| ModelAudit | 7/12 (58%) | 5 | 0 | 0/4 |
+
+*Detected* is recall over the samples a tool parses; *Not attempted* counts
+formats a tool can't read (pickle-only scanners on GGUF/Keras/TF), so a tool is
+never penalized for a format it never claims to scan. Purser is the only tool
+that attempts every format **and** flags every malicious sample with zero false
+positives. Peer numbers depend on installed versions and available deps (e.g.
+ModelScan skips Keras/TF here without those runtimes) — re-run `compare.py` in
+your environment for authoritative figures.
 
 ## Corpus
 

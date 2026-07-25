@@ -67,9 +67,11 @@ curl -s -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   http://purser.purser.svc/v1/scan/path | jq .verdict
 ```
 
-A common placement is a **pre-load gate**: a serving controller or model-registry
-webhook calls `/v1/scan/upload` and only mounts/serves a model whose verdict is
-`PASS`/`WARN`.
+A common placement is a **pre-load gate**: call `/v1/scan/upload` from CI or a
+model-registry hook and only promote a model whose verdict is `PASS`/`WARN`. To
+enforce this at *deploy* time in Kubernetes, enable the bundled
+[admission webhook](#kubernetes) (`admission.enabled=true`), which rejects pods
+that reference unpinned images or unapproved model digests.
 
 **In a GitLab pipeline** — run the image as a CI job; the **exit code gates the
 pipeline** (`0` pass/warn · `1` findings · `2` policy-blocked · `3` error), so a
@@ -144,6 +146,7 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 | REST API server | ✅ | ❌ | ❌ | ❌ | ◐ | ✅ |
 | SARIF output | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | Docker + Kubernetes deploy | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
+| Deploy-time enforcement (CI action + K8s admission webhook) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | CVE feeds / behavioral backdoor / dashboards | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
@@ -169,6 +172,12 @@ and **ModelAudit** is an excellent, more mature pure-scanner alternative if you 
 need policy/provenance. All static scanners — this one included — can be evaded by
 novel pickle gadgets; treat a clean scan as
 necessary, not sufficient.
+
+> **Reproducible numbers.** These rows aren't just asserted — a head-to-head
+> harness runs Purser and the OSS peers over a shared known-answer corpus and
+> publishes detection / miss / false-positive figures; see
+> [`benchmarks/`](benchmarks/README.md#latest-measured). A weekly CI job
+> re-measures and fails on any regression.
 
 ## Policy engine
 
@@ -503,6 +512,14 @@ Both run non-root with a read-only root filesystem, no privilege escalation, and
 `/healthz` probes; policy is a mounted ConfigMap (change it without rebuilding);
 mount a model-store PVC at `/models` for `POST /v1/scan/path`.
 
+**Deploy-time enforcement (`admission.enabled=true`).** An optional
+`ValidatingAdmissionWebhook` closes the scan→deploy TOCTOU gap: scanning proves a
+model was safe *when scanned*; the webhook enforces at *admission* that every
+container image is pinned by `@sha256:` digest and that any model a workload
+declares (annotation `purser.io/models`) is on the **approved-digest** list — the
+SHA-256s of models that passed a scan. Opt-in per namespace/pod and fail-closed
+by default; see the [chart README](deploy/helm/purser/README.md#admission-webhook-deploy-time-enforcement).
+
 ## Security model
 
 - Models are **never loaded**: pickle streams are analyzed with
@@ -534,7 +551,8 @@ pytest
 
 - [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one shipped.
 - [`ROADMAP.md`](ROADMAP.md) — what's next and why (external PKI trust root,
-  deeper per-format detection, an enforcement webhook, Wolfi base auto-refresh).
+  deeper per-format detection, an adversarial evasion benchmark, Wolfi base
+  auto-refresh).
 - [`SECURITY.md`](SECURITY.md) — disclosure policy + SME security evaluation of
   the code and container images (threat model, hardening, residual risk).
 

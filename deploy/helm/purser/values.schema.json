@@ -198,6 +198,24 @@
         }
       }
     },
+    "admission": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "failurePolicy": { "type": "string", "enum": ["Fail", "Ignore"] },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "requireImageDigest": { "type": "boolean" },
+        "failOpen": { "type": "boolean" },
+        "enforceLabel": { "type": "string" },
+        "modelAnnotation": { "type": "string" },
+        "verdictAnnotation": { "type": "string" },
+        "approvedDigests": { "type": "array" },
+        "rules": { "type": "array" },
+        "namespaceSelector": { "type": "object" },
+        "objectSelector": { "type": "object" }
+      }
+    },
     "hf": {
       "type": "object",
       "properties": {

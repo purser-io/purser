@@ -38,6 +38,7 @@ rotate on `helm upgrade`).
 | Prometheus scrape annotations | ServiceMonitor (`metrics.serviceMonitor.enabled`) |
 | Hardened pod/container securityContext | PrometheusRule alerts (`metrics.prometheusRule.enabled`) |
 | — | NetworkPolicy (`networkPolicy.enabled`) |
+| — | Admission webhook (`admission.enabled`) — deploy-time verdict + digest enforcement |
 
 Hardening applied to every workload: non-root `10001:10001`, read-only root FS,
 all capabilities dropped, `seccompProfile: RuntimeDefault`, no privilege
@@ -59,9 +60,37 @@ liveness/readiness/startup probes on `/healthz`.
 | `metrics.prometheusRule.enabled` | `false` | starter alert set (Prometheus Operator) |
 | `modelStore.enabled` | `false` | mount a PVC for `/v1/scan/path` |
 | `deep.enabled` / `hf.enabled` | `false` | optional companions |
+| `admission.enabled` | `false` | ValidatingAdmissionWebhook: require image-digest pinning + approved-model digests at deploy time |
+| `admission.approvedDigests` | `[]` | SHA-256s of models that passed a scan (a declared model must be listed) |
+| `admission.failurePolicy` | `Fail` | `Ignore` to fail-open at the API-server level |
 
 See [`values.yaml`](values.yaml) for the fully-documented set; `values.schema.json`
 validates them at install time.
+
+## Admission webhook (deploy-time enforcement)
+
+`admission.enabled=true` installs a `ValidatingAdmissionWebhook` that closes the
+scan→deploy TOCTOU gap: scanning a model in CI proves it was safe *then*; the
+webhook enforces at *admission* that (1) every container image is pinned by
+`@sha256:` digest and (2) any model a workload declares (annotation
+`purser.io/models`) is on the **approved-digest** list — the SHA-256s of models
+that passed a Purser scan (`admission.approvedDigests`). A `purser.io/scan-verdict:
+FAIL|BLOCKED` annotation is always denied. The chart generates and retains a
+self-signed serving cert and wires its CA into the webhook's `caBundle`.
+
+It is **opt-in and fail-safe by default** — only namespaces labeled
+`purser.io/admission: enforce` are selected, and within them only pods labeled
+`purser.io/enforce: "true"` are checked. Never label `kube-system` or the Purser
+namespace. With `failurePolicy: Fail` (the default), a down webhook blocks pod
+creation in *selected* namespaces, so keep the selector tight.
+
+```bash
+helm upgrade purser oci://ghcr.io/purser-io/charts/purser --version 0.1.3 \
+  -n purser --reuse-values \
+  --set admission.enabled=true \
+  --set 'admission.approvedDigests={<sha256-of-a-passed-model>}'
+kubectl label ns my-app purser.io/admission=enforce
+```
 
 ## Upgrade / uninstall
 

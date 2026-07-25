@@ -40,6 +40,16 @@ http://{{ include "purser.fullname" . }}-deep:8090.
 HuggingFace worker is ENABLED at service {{ include "purser.fullname" . }}-hf
 (makes outbound calls — keep it on an egress-restricted node).
 {{- end }}
+{{- if .Values.admission.enabled }}
+
+Admission webhook is ENABLED (failurePolicy: {{ .Values.admission.failurePolicy }}).
+It enforces image-digest pinning{{ if .Values.admission.approvedDigests }} and approved-model digests{{ end }} at deploy time.
+  * Opt IN a namespace:  kubectl label ns <ns> purser.io/admission=enforce
+  * Opt IN a pod:        add label purser.io/enforce: "true"
+  * Declare a model:     add annotation purser.io/models: "sha256:<digest>"
+  DO NOT label kube-system or the "{{ .Release.Namespace }}" namespace — with
+  failurePolicy: Fail a webhook outage would block pod creation there.
+{{- end }}
 
 Scan a model (verdict drives the exit/verdict; JSON body of the report returned):
   curl -s {{ if .Values.auth.enabled }}-H "X-API-Key: $KEY" {{ end }}-F "file=@model.safetensors" localhost:8080/v1/scan/upload | jq .verdict

@@ -1,0 +1,72 @@
+# Scheduled validation benchmark (roadmap #1). Runs the known-answer + real-model
+# corpus weekly and on demand, and GATES on regression: a drop in known-answer
+# detection or a rise in the benign false-positive rate fails the job. Also runs
+# the best-effort peer-scanner comparison. Publishes the reports as artifacts.
+name: Benchmark
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"   # Mondays 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      min_tpr:
+        description: "Fail if known-answer detection drops below this %"
+        default: "100"
+      max_fpr:
+        description: "Fail if benign false-positive rate exceeds this %"
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install Purser (+ hf for the real-model negative set)
+        run: |
+          uv venv --clear
+          uv pip install -e ".[dev,sign,hf]"
+
+      # Real, reputable HF models -> the meaningful false-positive signal.
+      # Best-effort: a gated/renamed repo is skipped (fetch_benign.py tolerates it).
+      - name: Fetch benign models
+        run: uv run python benchmarks/fetch_benign.py
+
+      # Regression gate: KAT detection floor + benign FPR ceiling.
+      - name: Run validation benchmark (gated)
+        run: |
+          uv run python benchmarks/run.py \
+            --min-tpr "${{ github.event.inputs.min_tpr || '100' }}" \
+            --max-fpr "${{ github.event.inputs.max_fpr || '0' }}"
+
+      # Head-to-head vs peer scanners. Best-effort: a peer whose install fails
+      # or that doesn't support a format shows n/a; never fails the job.
+      - name: Install peer scanners (best-effort)
+        continue-on-error: true
+        run: uv pip install picklescan modelscan fickling modelaudit
+      - name: Peer-scanner comparison
+        continue-on-error: true
+        run: uv run python benchmarks/compare.py
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: |
+            benchmarks/results/report.md
+            benchmarks/results/results.json
+            benchmarks/results/comparison.md
+          if-no-files-found: warn

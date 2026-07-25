@@ -1,0 +1,104 @@
+{{- if .Values.admission.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "purser.fullname" . }}-admission
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+spec:
+  replicas: {{ .Values.admission.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "purser.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admission
+  template:
+    metadata:
+      labels:
+        {{- include "purser.labels" . | nindent 8 }}
+        app.kubernetes.io/component: admission
+      annotations:
+        # roll the webhook pods when the approved-digest set changes
+        checksum/approved: {{ include (print $.Template.BasePath "/admission/configmap-approved.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "purser.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: admission
+          image: {{ include "purser.image" (dict "repo" (.Values.admission.image.repository | default .Values.image.repository) "tag" (.Values.admission.image.tag | default .Values.image.tag) "root" $) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/venv/bin/uvicorn"]
+          args:
+            - purser.admission:app
+            - --host=0.0.0.0
+            - --port=8443
+            - --ssl-keyfile=/tls/tls.key
+            - --ssl-certfile=/tls/tls.crt
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          env:
+            - name: PURSER_ADMISSION_REQUIRE_IMAGE_DIGEST
+              value: {{ ternary "1" "0" .Values.admission.requireImageDigest | quote }}
+            - name: PURSER_ADMISSION_FAIL_OPEN
+              value: {{ ternary "1" "0" .Values.admission.failOpen | quote }}
+            - name: PURSER_ADMISSION_ENFORCE_LABEL
+              value: {{ .Values.admission.enforceLabel | quote }}
+            - name: PURSER_ADMISSION_MODEL_ANNOTATION
+              value: {{ .Values.admission.modelAnnotation | quote }}
+            - name: PURSER_ADMISSION_VERDICT_ANNOTATION
+              value: {{ .Values.admission.verdictAnnotation | quote }}
+            - name: PURSER_ADMISSION_APPROVED_DIGESTS
+              value: /approved
+          startupProbe:
+            httpGet: { path: /healthz, port: https, scheme: HTTPS }
+            {{- toYaml .Values.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: https, scheme: HTTPS }
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: https, scheme: HTTPS }
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          resources:
+            {{- toYaml .Values.admission.resources | nindent 12 }}
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: approved
+              mountPath: /approved
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ include "purser.fullname" . }}-admission-tls
+        - name: approved
+          configMap:
+            name: {{ include "purser.fullname" . }}-admission-approved
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -74,15 +74,30 @@ def _detected(r: dict) -> bool:
     return r["max_severity"] in DETECTED
 
 
-def _report(results: list[dict], policy_name: str) -> str:
+def _metrics(results: list[dict]) -> dict:
+    """Headline numbers the report prints and the CI gate checks against."""
     mal = [r for r in results if r["label"] == "malicious"]
     ben = [r for r in results if r["label"] == "benign"]
     tp = sum(_detected(r) for r in mal)
     fn = [r for r in mal if not _detected(r)]
     fp = [r for r in ben if r["verdict"] in HARD_REJECT]
     warn = [r for r in ben if r["verdict"] == "WARN"]
-    tpr = tp / len(mal) * 100 if mal else 0.0
-    fpr = len(fp) / len(ben) * 100 if ben else 0.0
+    lat = [r["seconds"] for r in results]
+    return {
+        "malicious": len(mal), "benign": len(ben),
+        "tp": tp, "fn": fn, "fp": fp, "warn": warn,
+        "tpr": tp / len(mal) * 100 if mal else 0.0,
+        "fpr": len(fp) / len(ben) * 100 if ben else 0.0,
+        "p50_ms": _pct(lat, .5) * 1000, "p95_ms": _pct(lat, .95) * 1000,
+    }
+
+
+def _report(results: list[dict], policy_name: str) -> str:
+    mal = [r for r in results if r["label"] == "malicious"]
+    ben = [r for r in results if r["label"] == "benign"]
+    m = _metrics(results)
+    tp, fn, fp, warn = m["tp"], m["fn"], m["fp"], m["warn"]
+    tpr, fpr = m["tpr"], m["fpr"]
     lat = [r["seconds"] for r in results]
 
     # per attack-class (malicious) and per-format detection
@@ -135,9 +150,13 @@ def _report(results: list[dict], policy_name: str) -> str:
     return "\n".join(L)
 
 
-def main() -> None:
+def main() -> int:
     ap = argparse.ArgumentParser(description="Purser validation harness")
     ap.add_argument("--policy", default=None, help="policy YAML (default: built-in default)")
+    ap.add_argument("--min-tpr", type=float, default=None,
+                    help="fail (exit 1) if known-answer detection drops below this %%")
+    ap.add_argument("--max-fpr", type=float, default=None,
+                    help="fail (exit 1) if the benign false-positive rate exceeds this %%")
     args = ap.parse_args()
     policy = Policy.load(args.policy) if args.policy else Policy.default()
     policy_name = args.policy or "default"
@@ -152,6 +171,22 @@ def main() -> None:
     (RESULTS / "report.md").write_text(report)
     print(report)
 
+    # Regression gate (used by the scheduled CI job). Absent thresholds => report-only.
+    m = _metrics(results)
+    failures = []
+    if args.min_tpr is not None and m["tpr"] < args.min_tpr:
+        failures.append(f"TPR {m['tpr']:.1f}% < floor {args.min_tpr:.1f}% "
+                        f"(missed: {', '.join(r['id'] for r in m['fn']) or 'none'})")
+    if args.max_fpr is not None and m["fpr"] > args.max_fpr:
+        failures.append(f"FPR {m['fpr']:.1f}% > ceiling {args.max_fpr:.1f}% "
+                        f"(false positives: {', '.join(r['id'] for r in m['fp']) or 'none'})")
+    if failures:
+        print("\nBENCHMARK GATE FAILED:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -189,6 +189,56 @@ topologySpreadConstraints:
         app.kubernetes.io/component: core
 
 # ---------------------------------------------------------------------------
+# Optional ValidatingAdmissionWebhook — enforce scan verdicts + image digest
+# pinning at *deploy* time, closing the scan->deploy TOCTOU gap. Off by default.
+#
+# SAFETY: with failurePolicy: Fail, a webhook that is *down* blocks pod creation
+# in every namespace it selects. The defaults are deliberately opt-in — only
+# namespaces labeled `purser.io/admission: enforce` are subject to it, and only
+# pods labeled `purser.io/enforce: "true"` within them are checked. Do NOT label
+# kube-system or the Purser namespace itself.
+# ---------------------------------------------------------------------------
+admission:
+  enabled: false
+  replicaCount: 2
+  image:
+    repository: ""            # defaults to image.repository (the core image serves purser.admission)
+    tag: ""                   # defaults to image.tag / chart appVersion
+  # K8s failurePolicy when the webhook is unreachable: Fail (secure) | Ignore.
+  failurePolicy: Fail
+  timeoutSeconds: 5
+  # Require every container image to be pinned by @sha256: digest.
+  requireImageDigest: true
+  # On an internal handler error: false = deny (recommended), true = allow.
+  failOpen: false
+  # Only enforce on pods carrying this label == "true". "" enforces on every
+  # object the webhook is called for (still scoped by namespaceSelector).
+  enforceLabel: purser.io/enforce
+  # Pod annotations the webhook reads.
+  modelAnnotation: purser.io/models          # comma/space list of model sha256s
+  verdictAnnotation: purser.io/scan-verdict  # FAIL/BLOCKED here is always denied
+  # Approved model SHA-256s (models that passed a Purser scan). Rendered into a
+  # ConfigMap and mounted; a pod that declares models is admitted only if every
+  # declared digest is listed. Empty => any declared model is denied (fail-closed).
+  approvedDigests: []
+  # Which objects to validate (default: Pods). Point at controllers instead if
+  # you prefer template-level enforcement.
+  rules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["pods"]
+  # Opt-in per namespace (recommended). Label namespaces you want enforced with
+  # `purser.io/admission: enforce`. Override for a different scoping strategy.
+  namespaceSelector:
+    matchLabels:
+      purser.io/admission: enforce
+  objectSelector: {}
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# ---------------------------------------------------------------------------
 # Optional HuggingFace download worker (separate image; makes outbound calls).
 # ---------------------------------------------------------------------------
 hf:

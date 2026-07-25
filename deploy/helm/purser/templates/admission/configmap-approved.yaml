@@ -1,0 +1,17 @@
+{{- if .Values.admission.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "purser.fullname" . }}-admission-approved
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+data:
+  # Approved model SHA-256s (one per line; `sha256:` prefix optional). Populate
+  # from your scan pipeline: every model that passes `purser scan` appends its
+  # report hash here (helm upgrade --set-file, GitOps, or an external process).
+  approved-digests.txt: |
+    {{- range .Values.admission.approvedDigests }}
+    {{ . }}
+    {{- end }}
+{{- end }}
