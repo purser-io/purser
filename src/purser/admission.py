@@ -38,6 +38,7 @@ Configuration (PURSER_ADMISSION_* env):
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -46,6 +47,8 @@ from fastapi.responses import JSONResponse
 
 from purser import __version__
 from purser.core.env import env_get
+
+_log = logging.getLogger("purser.admission")
 
 app = FastAPI(title="Purser admission webhook", version=__version__,
               description="Enforces scan verdicts + image digest pinning at deploy time")
@@ -219,10 +222,15 @@ def evaluate(review: dict) -> dict:
         else:
             msg = "purser denied admission: " + "; ".join(reasons)
         return _response(uid, allowed, msg, warnings)
-    except Exception as exc:  # pragma: no cover - defensive
-        if _fail_open():
-            return _response(uid, True, f"purser: check errored, failing open: {exc}", [])
-        return _response(uid, False, f"purser: check errored, failing closed: {exc}", [])
+    except Exception:  # pragma: no cover - defensive
+        # Log the detail server-side; never leak exception text back to the API
+        # server / client in the admission response.
+        _log.exception("admission check errored for uid %s", uid)
+        allowed = _fail_open()
+        return _response(
+            uid, allowed,
+            "purser: internal check error, failing " + ("open" if allowed else "closed"),
+            [])
 
 
 # --- HTTP surface -----------------------------------------------------------
