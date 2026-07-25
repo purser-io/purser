@@ -50,7 +50,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 | Item | Notes |
 |---|---|
-| Per-format graph parsing (TensorRT, OpenVINO, CoreML, TF, Paddle) | Detection is currently marker/substring based (or format-ID + exfil only for TensorRT/OpenVINO/MXNet), so it can't distinguish *declared* vs *reachable* ops. **ModelAudit** has deeper scanners here — the main parity gap from the comparison chart. |
+| Per-format graph parsing (TensorRT, OpenVINO, CoreML, TF, Paddle) | Detection is currently marker/substring based (or format-ID + exfil only for OpenVINO/MXNet; TensorRT `.engine`/`.plan` isn't recognized as a format yet — it falls through to the exfil-only path), so it can't distinguish *declared* vs *reachable* ops. **ModelAudit** has deeper scanners here — the main parity gap from the comparison chart. |
 | Keras custom-layer (non-`Lambda`) | The h5py-less byte fallback only matches `Lambda`/`TFOpLambda`; a custom registered layer with a malicious `__call__` evades it. Needs deeper HDF5/config parsing. |
 | Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
 | More exfil encodings | base85 and XOR/rolling-key deobfuscation remain (higher false-positive risk). UTF-16, base64/hex/base32, and one gzip/zlib layer are already covered. |
@@ -102,7 +102,7 @@ they live under *Candidates — detection depth* above.
 Moved out of the roadmap now that they're done (see [`CHANGELOG.md`](CHANGELOG.md)
 for per-release detail):
 
-- **Public release & distribution (v0.1.0 → v0.1.2):** public git repo with
+- **Public release & distribution (v0.1.0 → v0.1.3):** public git repo with
   protected `main`; GitHub Actions CI (lint + test matrix 3.11–3.14, lockfile /
   license gates, Helm lint, image builds + Trivy) and a tag-driven release
   pipeline; **PyPI** publishing via OIDC Trusted Publishing; public multi-arch
