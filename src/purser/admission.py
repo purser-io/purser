@@ -54,7 +54,8 @@ _log = logging.getLogger("purser.admission")
 def _scrub(value: object) -> str:
     """Neutralize CR/LF/control chars in untrusted text before logging it, so a
     crafted request field can't forge or inject log lines. Bounded length."""
-    return re.sub(r"[\x00-\x1f\x7f]", "?", str(value))[:256]
+    s = str(value).replace("\r", "").replace("\n", "").replace("\t", " ")
+    return "".join(c for c in s if c.isprintable())[:256]
 
 app = FastAPI(title="Purser admission webhook", version=__version__,
               description="Enforces scan verdicts + image digest pinning at deploy time")
