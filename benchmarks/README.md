@@ -10,11 +10,14 @@ optional **real-model** negative set pulled from HuggingFace. No live malware is
 generated or committed.
 
 **Phase 2** (this): a head-to-head comparison vs picklescan / Fickling /
-ModelScan / ModelAudit over the same corpus (`compare.py`). **Phase 4** (this):
-scheduled CI (`.github/workflows/benchmark.yml`) runs the corpus weekly and
-**gates on regression** — a drop in known-answer detection or a rise in the
-benign FPR fails the job. Remaining: an adversarial evasion suite (Phase 3) and
-a growing real-model corpus.
+ModelScan / ModelAudit over the same corpus (`compare.py`). **Phase 3** (this):
+an adversarial **evasion suite** (`evasion.py`) — malicious payloads wrapped in
+spoofed extensions, nested archives, `STACK_GLOBAL`/`posix` pickles, and
+encoded/obfuscated exfil — measuring evasion recall and surfacing known-open
+gaps. **Phase 4** (this): scheduled CI (`.github/workflows/benchmark.yml`) runs
+the corpus weekly and **gates on regression** — a drop in known-answer
+detection, a rise in the benign FPR, or an evasion-recall regression fails the
+job. Remaining: a growing real-model corpus.
 
 ## Run it
 
@@ -33,6 +36,9 @@ python benchmarks/run.py --min-tpr 100 --max-fpr 0   # exit 1 on regression
 # head-to-head vs peers (install any subset; missing ones show n/a):
 pip install picklescan modelscan fickling modelaudit
 python benchmarks/compare.py             # -> results/comparison.md
+
+# adversarial evasion resistance (Phase 3), gated on the resisted set:
+python benchmarks/evasion.py --min-recall 100   # -> results/evasion.md
 ```
 
 Outputs `benchmarks/results/{report,comparison}.md` and `results.json` (all gitignored).
@@ -76,6 +82,18 @@ that attempts every format **and** flags every malicious sample with zero false
 positives. Peer numbers depend on installed versions and available deps (e.g.
 ModelScan skips Keras/TF here without those runtimes) — re-run `compare.py` in
 your environment for authoritative figures.
+
+Adversarial evasion resistance (`evasion.py`):
+
+| Set | Result |
+|---|---|
+| Evasion recall on techniques Purser claims to resist | **100%** (13/13) — gated |
+| Known-open residuals (ROADMAP) exercised | 4 evaded (base85, XOR, packed-binary endpoint, protocol-0 ASCII pickle under a structured ext) |
+
+The resisted set spans spoofed extensions, doc-name disguise, nested archives,
+`.npz`-embedded pickles, `STACK_GLOBAL`/`posix` pickles, base32/hex/zlib/UTF-16
+exfil, and encoded/obfuscated `trust_remote_code` source. The four known-open
+residuals are reported (not gated) so the frontier stays measured, not hidden.
 
 ## Corpus
 

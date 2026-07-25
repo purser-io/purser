@@ -51,6 +51,11 @@ jobs:
             --min-tpr "${{ github.event.inputs.min_tpr || '100' }}" \
             --max-fpr "${{ github.event.inputs.max_fpr || '0' }}"
 
+      # Phase 3: adversarial evasion. Gate on recall over the techniques Purser
+      # claims to resist (known-open residuals are reported, not gated).
+      - name: Adversarial evasion suite (gated)
+        run: uv run python benchmarks/evasion.py --min-recall 100
+
       # Head-to-head vs peer scanners. Best-effort: a peer whose install fails
       # or that doesn't support a format shows n/a; never fails the job.
       - name: Install peer scanners (best-effort)
@@ -69,4 +74,6 @@ jobs:
             benchmarks/results/report.md
             benchmarks/results/results.json
             benchmarks/results/comparison.md
+            benchmarks/results/evasion.md
+            benchmarks/results/evasion.json
           if-no-files-found: warn

@@ -9,8 +9,8 @@ container images and a signed Helm chart on GHCR, built and published by CI). Th
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
-deploy-time admission enforcement, and a gated validation benchmark are all
-shipped (201 tests). What remains is **not** bug-fixing — it is maturity, reach,
+deploy-time admission enforcement, and a gated validation benchmark (incl. an
+adversarial evasion suite) are all shipped (203 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -22,11 +22,13 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 1. **Real-world validation + published benchmark.** A Phase-1 harness (known-answer
    detection + false-positive rate + latency), a Phase-2 head-to-head comparison
-   vs picklescan / Fickling / ModelScan / ModelAudit (`benchmarks/compare.py`),
-   and a **scheduled CI job that gates on regression** (detection floor / FPR
-   ceiling) all ship in `benchmarks/`, with numbers published in
-   `benchmarks/README.md`. Remaining: an adversarial **evasion suite** (Phase 3)
-   and continued growth of the real-model corpus + trend publication.
+   vs picklescan / Fickling / ModelScan / ModelAudit (`benchmarks/compare.py`), a
+   Phase-3 adversarial **evasion suite** (`benchmarks/evasion.py` — gated on
+   evasion recall over the techniques Purser claims to resist; known-open
+   residuals reported, not gated), and a **scheduled CI job that gates on
+   regression** (detection floor / FPR ceiling / evasion-recall) all ship in
+   `benchmarks/`, with numbers published in `benchmarks/README.md`. Remaining:
+   continued growth of the real-model corpus + trend publication.
 2. **External PKI / transparency trust root.** The largest remaining *trust*
    improvement for **model** provenance — move it from operator-asserted keys to a
    verified root (Sigstore Fulcio/Rekor or HuggingFace commit signatures). Note:
@@ -52,7 +54,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 | Per-format graph parsing (TensorRT, OpenVINO, CoreML, TF, Paddle) | Detection is currently marker/substring based (or format-ID + exfil only for OpenVINO/MXNet/TensorRT `.engine`/`.plan`/`.trt`), so it can't distinguish *declared* vs *reachable* ops. **ModelAudit** has deeper scanners here — the main parity gap from the comparison chart. |
 | Keras custom-layer (non-`Lambda`) | The h5py-less byte fallback only matches `Lambda`/`TFOpLambda`; a custom registered layer with a malicious `__call__` evades it. Needs deeper HDF5/config parsing. |
 | Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
-| More exfil encodings | base85 and XOR/rolling-key deobfuscation remain (higher false-positive risk). UTF-16, base64/hex/base32, and one gzip/zlib layer are already covered. |
+| More exfil encodings | base85 and XOR/rolling-key deobfuscation remain (higher false-positive risk). UTF-16, base64/hex/base32, and one gzip/zlib layer are already covered. The Phase-3 evasion suite (`benchmarks/evasion.py`) now exercises base85/XOR as **known-open** residuals, so closing either would show up as a measured evasion-recall gain. |
 | Packed-binary C2 endpoints | Endpoints stored as packed bytes (no ASCII/UTF-16 form) aren't extracted; needs structured per-format parsing. |
 | Protocol-0/1 pickle under a spoofed structured extension | Magic beats extension for protocol-2+ pickles and for binaries hidden under doc/config names; a *protocol-0/1 (ASCII)* pickle renamed to a structured non-pickle extension (e.g. `.onnx`) is flagged as a format mismatch but not yet classified by payload. |
 
@@ -114,8 +116,9 @@ for per-release detail):
   (`purser.admission`, Helm `admission.enabled`) enforces image-digest pinning +
   approved-model digests at admission — closing the scan→deploy TOCTOU gap.
 - **Validation benchmark:** a known-answer + real-model harness, a peer-scanner
-  head-to-head comparison, and a scheduled CI job that gates on detection/FPR
-  regression (`benchmarks/`).
+  head-to-head comparison, a Phase-3 adversarial evasion suite (gated on evasion
+  recall), and a scheduled CI job that gates on detection/FPR/evasion regression
+  (`benchmarks/`).
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.
