@@ -5,7 +5,7 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
-## [Unreleased]
+## [0.1.3] - 2026-07-24
 ### Fixed
 - Exfiltration false positives on binary/quantized weights: the secret and
   encoded-payload heuristics are now **entropy-gated** (a chance `hf_...` or hex
@@ -54,6 +54,7 @@ GitHub notes are generated automatically; this file is the curated summary.
   CLI; Prometheus metrics and an audit log; optional deep-analysis companion;
   digest-pinned Wolfi container images, kustomize manifests, and a Helm chart.
 
+[0.1.3]: https://github.com/purser-io/purser/releases/tag/v0.1.3
 [0.1.2]: https://github.com/purser-io/purser/releases/tag/v0.1.2
 [0.1.1]: https://github.com/purser-io/purser/releases/tag/v0.1.1
 [0.1.0]: https://github.com/purser-io/purser/releases/tag/v0.1.0
