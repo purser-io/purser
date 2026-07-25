@@ -84,6 +84,15 @@ scan-models:
   artifacts: { when: always, paths: [purser.sarif] }
 ```
 
+**In GitHub Actions** — the [`purser-io/purser`](action.yml) action does the same in one step and fails the job on findings/blocked:
+
+```yaml
+- uses: purser-io/purser@main   # pin to a release tag or commit SHA
+  with:
+    path: ./models
+    policy: .purser/policy.yaml   # optional; sarif written to purser.sarif
+```
+
 Use the `-hf` image and `purser scan hf://org/model` to pull + scan a
 HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 `allow_failure: true` while tuning the policy. Full walkthrough:

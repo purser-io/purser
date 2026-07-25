@@ -19,6 +19,7 @@ GitHub notes are generated automatically; this file is the curated summary.
   on a 268 MB quantized ONNX; no detection change).
 
 ### Added
+- A composite **GitHub Action** (`action.yml`) — `uses: purser-io/purser@<ref>` runs a scan and gates CI on the policy verdict.
 - Ship a `py.typed` marker (PEP 561) so type checkers pick up Purser's type
   hints; add project URLs to the package metadata; `CITATION.cff`.
 

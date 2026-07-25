@@ -1,0 +1,79 @@
+name: "Purser — ML model scan"
+description: >-
+  Statically scan ML model artifacts for malicious code and data-exfiltration and
+  gate CI on policy. Exit-code driven: 0 pass/warn · 1 findings · 2 policy-blocked
+  · 3 error — a bad model fails the job.
+author: "The Purser Authors"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  path:
+    description: "File, directory, or hf://org/repo to scan."
+    default: "."
+  policy:
+    description: "Path to a policy YAML (defaults to Purser's built-in policy)."
+    required: false
+    default: ""
+  origin:
+    description: "Claimed country of origin (ISO 3166-1 alpha-2) for policy matching."
+    required: false
+    default: ""
+  format:
+    description: "Report format: table | json | sarif."
+    default: "sarif"
+  output:
+    description: "Write the report to this file (empty = stdout)."
+    default: "purser.sarif"
+  version:
+    description: "Purser version to install from PyPI."
+    default: "0.1.2"
+  extras:
+    description: "pip extra to enable, e.g. 'hf' to allow scanning hf:// targets."
+    default: ""
+  soft-fail:
+    description: "If 'true', report findings but never fail the job."
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Purser
+      shell: bash
+      # NB: deliberately NOT using PURSER_* env names — the scanner reads those.
+      env:
+        PKG_VERSION: ${{ inputs.version }}
+        PKG_EXTRAS: ${{ inputs.extras }}
+      run: |
+        set -euo pipefail
+        spec="purser==${PKG_VERSION}"
+        [ -n "${PKG_EXTRAS}" ] && spec="purser[${PKG_EXTRAS}]==${PKG_VERSION}"
+        echo "installing ${spec}"
+        if command -v pipx >/dev/null 2>&1; then
+          pipx install "${spec}"
+        else
+          python3 -m pip install --disable-pip-version-check --quiet "${spec}"
+        fi
+
+    - name: Scan
+      shell: bash
+      env:
+        IN_PATH: ${{ inputs.path }}
+        IN_POLICY: ${{ inputs.policy }}
+        IN_ORIGIN: ${{ inputs.origin }}
+        IN_FORMAT: ${{ inputs.format }}
+        IN_OUTPUT: ${{ inputs.output }}
+        IN_SOFT_FAIL: ${{ inputs.soft-fail }}
+      run: |
+        set -uo pipefail
+        args=(scan "${IN_PATH}" --format "${IN_FORMAT}")
+        [ -n "${IN_POLICY}" ] && args+=(--policy "${IN_POLICY}")
+        [ -n "${IN_ORIGIN}" ] && args+=(--origin "${IN_ORIGIN}")
+        [ -n "${IN_OUTPUT}" ] && args+=(--output "${IN_OUTPUT}")
+        echo "+ purser ${args[*]}"
+        if [ "${IN_SOFT_FAIL}" = "true" ]; then
+          purser "${args[@]}" || echo "::warning title=Purser::scan exited $? (soft-fail enabled)"
+        else
+          purser "${args[@]}"
+        fi

@@ -30,9 +30,10 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
    Purser's own *artifacts* are already cosign-keyless-signed via Fulcio/Rekor.
 3. **Per-format scanner depth (TensorRT, OpenVINO, non-`Lambda` Keras).** Closes
    the one area where the OSS peer **ModelAudit** leads (per the comparison chart).
-4. **Enforcement primitive.** A Kubernetes `ValidatingAdmissionWebhook` or CI
-   action that *enforces* the verdict (+ hash pinning) at deploy time, closing the
-   scan→deploy TOCTOU gap.
+4. **Enforcement primitive.** A GitHub Actions CI action ships (`action.yml` —
+   gates the job on the verdict). Remaining: a Kubernetes
+   `ValidatingAdmissionWebhook` enforcing the verdict (+ hash pinning) at *deploy*
+   time, closing the scan→deploy TOCTOU gap.
 5. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
@@ -110,6 +111,8 @@ for per-release detail):
 - **Community & governance:** `CONTRIBUTING.md`, a Contributor Covenant Code of
   Conduct, bug/feature issue forms + a PR template, an **enforced DCO** sign-off
   check, `CITATION.cff`, a `py.typed` marker, and package `[project.urls]`.
+- **CI enforcement action:** a composite GitHub Action (`action.yml`) runs a
+  scan and gates the job on the policy verdict.
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.
