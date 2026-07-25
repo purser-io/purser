@@ -15,7 +15,8 @@ ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:02dab76bd852a70556b5b20021
 FROM ${WOLFI} AS build
 WORKDIR /app
 # python-dev + build-base only in the build stage (discarded) for any sdist.
-RUN apk add --no-cache python-3.14 python-3.14-dev py3.14-pip build-base
+RUN apk add --no-cache python-3.14 python-3.14-dev py3.14-pip build-base \
+    && apk upgrade --no-cache
 RUN python3.14 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 COPY requirements.lock ./
@@ -32,6 +33,7 @@ LABEL org.opencontainers.image.title="Purser" \
 
 # Runtime python only — no pip, no compilers, no build tooling.
 RUN apk add --no-cache python-3.14 \
+    && apk upgrade --no-cache \
     && mkdir -p /models /policies \
     && chown -R 10001:10001 /models /policies
 
