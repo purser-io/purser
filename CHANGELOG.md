@@ -7,6 +7,7 @@ GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
 ### Added
+- **base85 exfiltration decoding:** the exfil engine now decodes base85 (RFC 1924) blobs and re-analyzes them, alongside the existing base64/hex/base32 + one gzip/zlib layer. Flagged only when the decoded bytes resolve to a real URL/secret/code indicator, so base85's permissive alphabet doesn't raise the false-positive rate. Surfaced and then closed as a measured gap by the Phase-3 evasion suite.
 - Helm chart: an optional **PrometheusRule** alert set (`metrics.prometheusRule.enabled`) — target-down, scan errors (incl. deep-companion unavailable), FAIL/BLOCKED spike, policy blocks, load-shedding, and auth-failure spikes, wired to the existing `/metrics` series.
 - **TensorRT** engine recognition: `.engine`/`.plan`/`.trt` are now identified as a `tensorrt` format (data-only/opaque, like OpenVINO/MXNet) so policy can allow/deny them and reports name them; the format-agnostic exfiltration scan runs over their bytes. Deep graph parsing remains a roadmap candidate.
 - **Kubernetes admission webhook** (`purser.admission`, Helm `admission.enabled`): a `ValidatingAdmissionWebhook` that enforces image-digest pinning and approved-model digests at deploy time, closing the scan→deploy TOCTOU gap. Opt-in per namespace/pod, fail-closed by default, with a chart-generated + retained serving cert wired into the webhook `caBundle`.

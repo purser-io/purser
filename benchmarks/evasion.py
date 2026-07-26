@@ -11,8 +11,8 @@ pickle, etc.
 Every sample is tagged `resisted` (Purser claims to defeat this technique) or
 not. Evasion **recall over the resisted set must stay 100%** — a miss there is a
 regression and fails the gate. The non-resisted samples are *known* residuals
-from `ROADMAP.md` (base85 / XOR-obfuscated exfil, packed-binary C2 endpoints,
-and a protocol-0 ASCII pickle under a structured extension); they are reported
+from `ROADMAP.md` (XOR-obfuscated exfil, packed-binary C2 endpoints, and a
+protocol-0 ASCII pickle under a structured extension); they are reported
 honestly as "evaded" so the frontier is visible and measured, not hidden.
 
     python benchmarks/evasion.py                 # report
@@ -130,6 +130,8 @@ def build(dest: Path) -> list[dict]:
     add("exfil-b64zlib", dest / "zlib.bin", "webhook as base64(zlib(...))", True)
     (dest / "utf16.bin").write_bytes(b"WGHT" + b"\x00" * 8 + _WEBHOOK.decode().encode("utf-16-le"))
     add("exfil-utf16", dest / "utf16.bin", "webhook as a UTF-16 (wide) string", True)
+    (dest / "b85.bin").write_bytes(b"WGHT" + b"\x00" * 8 + base64.b85encode(_WEBHOOK))
+    add("exfil-base85", dest / "b85.bin", "webhook encoded as base85", True)
 
     # ---- resisted: trust_remote_code with an encoded exec in the source ----
     trc = dest / "trc"
@@ -151,9 +153,6 @@ def build(dest: Path) -> list[dict]:
         "AST scanner flags getattr/__import__ indirection")
 
     # ================= known-open residuals (ROADMAP; not gated) =================
-    (dest / "b85.bin").write_bytes(b"WGHT" + b"\x00" * 8 + base64.b85encode(_WEBHOOK))
-    add("exfil-base85", dest / "b85.bin", "webhook encoded as base85", False,
-        "no base85 decoder yet (ROADMAP: more exfil encodings)")
     (dest / "xor.bin").write_bytes(b"WGHT" + b"\x00" * 8 + _xor(_WEBHOOK))
     add("exfil-xor", dest / "xor.bin", "webhook XOR-obfuscated (key 0x5A)", False,
         "no XOR/rolling-key deobfuscation yet (ROADMAP)")

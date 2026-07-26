@@ -51,6 +51,9 @@ IP_PORT_RE = re.compile(
 BASE64_RE = re.compile(r"\b[A-Za-z0-9+/]{64,}={0,2}")
 HEX_RE = re.compile(r"\b(?:[0-9a-fA-F]{2}){32,}\b")  # >=64 hex chars
 BASE32_RE = re.compile(r"\b[A-Z2-7]{64,}={0,6}")     # RFC 4648 base32
+# RFC 1924 / `base64.b85encode` alphabet (no \b: the class has non-word chars).
+# Permissive, so a match is only ever *flagged* if it decodes to a real payload.
+BASE85_RE = re.compile(r"[0-9A-Za-z!#$%&()*+;<=>?@^_`{|}~-]{64,}")
 
 BENIGN_URL_HOSTS = (
     "github.com", "raw.githubusercontent.com", "huggingface.co", "hf.co",
@@ -228,6 +231,22 @@ def _decoded_b32_verdict(blob: str) -> tuple[Severity, str] | None:
     return _decoded_text_verdict_layered(raw)
 
 
+def _decoded_b85_verdict(blob: str) -> tuple[Severity, str] | None:
+    # b85 decodes 5 chars -> 4 bytes; a greedy match may grab trailing chars, so
+    # also try the run trimmed to a clean multiple of 5.
+    for candidate in (blob, blob[: len(blob) - (len(blob) % 5)]):
+        if not candidate:
+            continue
+        try:
+            raw = base64.b85decode(candidate)
+        except (binascii.Error, ValueError):
+            continue
+        verdict = _decoded_text_verdict_layered(raw)
+        if verdict is not None:
+            return verdict
+    return None
+
+
 class ExfilScanner(Scanner):
     """Scans raw file bytes for exfiltration indicators. Format-agnostic."""
 
@@ -345,6 +364,7 @@ class ExfilScanner(Scanner):
                     (BASE64_RE, _decoded_payload_verdict, "Base64"),
                     (HEX_RE, _decoded_hex_verdict, "Hex-encoded"),
                     (BASE32_RE, _decoded_b32_verdict, "Base32-encoded"),
+                    (BASE85_RE, _decoded_b85_verdict, "Base85-encoded"),
                 ):
                     for m in regex.finditer(s):
                         verdict = decode(m.group())
