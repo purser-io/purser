@@ -7,9 +7,9 @@ version: 0.1.3
 # Version of the Purser app the chart deploys by default.
 appVersion: "0.1.3"
 kubeVersion: ">=1.25.0-0"
-home: https://example.com/purser
+home: https://purser-io.io
 sources:
-  - https://example.com/purser
+  - https://github.com/purser-io/purser
 keywords:
   - security
   - ai

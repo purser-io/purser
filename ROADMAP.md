@@ -82,9 +82,9 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 Mirrors the *does-not-defend-against* list in [`SECURITY.md`](SECURITY.md)
 (§ Threat model / Residual risk). The actively-worked residuals it also
-mentions — obfuscated encodings (base85/XOR), packed-binary endpoints, and
-fully runtime-assembled `trust_remote_code` source — are **not** out of scope;
-they live under *Candidates — detection depth* above.
+mentions — multi-byte / rolling-key XOR, packed-binary endpoints, and fully
+runtime-assembled `trust_remote_code` source — are **not** out of scope; they
+live under *Candidates — detection depth* above.
 
 | Item | Why |
 |---|---|

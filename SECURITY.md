@@ -177,9 +177,11 @@ against:
    banning pickle via an allowlist policy (`signed-only.yaml`).
 2. **Weight/behavioral backdoors** (poisoning, triggers) — a valid, safe-format
    file can still misbehave; this needs model-eval tooling, not container scanning.
-3. **Heavily obfuscated payloads** — XOR/custom-alphabet encodings, packed-binary
+3. **Heavily obfuscated payloads** — multi-byte / rolling-key XOR, packed-binary
    endpoints, or `trust_remote_code` source assembled fully at runtime can evade
-   name/pattern matching. Pair with an egress-deny sandbox at model-load time.
+   name/pattern matching. (Single-byte XOR and base64/hex/base32/base85 encodings
+   — plus one gzip/zlib layer and UTF-16 — are decoded and re-analyzed.) Pair with
+   an egress-deny sandbox at model-load time.
 4. **Spoofed provenance when signing is not required** — origin is advisory
    unless a policy sets `require_signed`.
 
@@ -187,6 +189,6 @@ Deploy Purser as **one layer of defense-in-depth**, not a sole trust boundary.
 
 ## Assurance
 
-- 159 automated tests (unit + API + adversarial fixtures with inert payloads).
+- 200+ automated tests (unit + API + adversarial/evasion fixtures with inert payloads).
 - `ruff` lint clean; reproducible hash-pinned builds; deterministic CycloneDX
   SBOM; `trivy` (image) and `osv-scanner` (deps) gates in CI.

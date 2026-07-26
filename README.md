@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.3-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-181%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-211%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -151,8 +151,8 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 
 ¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
 enterprise platforms; capabilities vary and are gated behind licensing.
-² Distinct formats with a dedicated detector. Purser identifies the most formats,
-but for some newer/opaque ones (TensorRT, OpenVINO, MXNet) it does format-ID +
+² Distinct formats with a dedicated detector. Purser identifies a broad range of
+formats, but for some newer/opaque ones (TensorRT, OpenVINO, MXNet) it does format-ID +
 exfil-scan rather than deep graph parsing — where **ModelAudit** has more per-format
 scanner depth (e.g. TensorRT, OpenVINO). Pick it if that depth matters more than
 policy/provenance.
@@ -303,6 +303,7 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_EXFIL_STRICT` | `0` | `1` disables the benign-URL allowlist entirely — every embedded URL is flagged. |
 | `PURSER_EXFIL_ALLOWLIST` | *(unset)* | Comma-separated hosts that **replace** the built-in benign-URL allowlist. |
 | `PURSER_EXFIL_ALLOWLIST_ADD` | *(unset)* | Comma-separated hosts **added** to the built-in allowlist. |
+| `PURSER_EXFIL_XOR` | `1` | `0`/`false` disables single-byte-XOR de-obfuscation of embedded payloads. |
 | `PURSER_ENABLE_HF` | `0` | Must be `1`/`true` to enable `POST /v1/scan/huggingface`. |
 | `PURSER_HF_ALLOWLIST` | *(empty)* | Comma-separated `org/` or `org/repo` prefixes permitted for the HF endpoint once enabled. |
 | `PURSER_ENABLE_DEEP` | `0` | Must be `1`/`true` to run the deep-analysis companion (see below). |
