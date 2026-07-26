@@ -188,6 +188,11 @@ against:
    an egress-deny sandbox at model-load time.
 4. **Spoofed provenance when signing is not required** — origin is advisory
    unless a policy sets `require_signed`.
+5. **Graph `declared`-vs-`reachable` dataflow** — Purser flags *declared*
+   dangerous ops / custom code in TF / Paddle / CoreML / ONNX graphs (the
+   fail-safe choice for a gate); proving a dangerous op is *reachable* at
+   runtime needs the framework's graph semantics at model-load, which a no-load
+   scanner does not do.
 
 Deploy Purser as **one layer of defense-in-depth**, not a sole trust boundary.
 

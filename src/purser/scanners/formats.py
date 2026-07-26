@@ -283,12 +283,21 @@ class TFSavedModelScanner(Scanner):
     name = "tf_savedmodel"
 
     DANGEROUS_OPS: dict[bytes, tuple[Severity, str]] = {
+        # arbitrary-code execution at inference time
         b"PyFunc": (Severity.CRITICAL, "executes arbitrary Python at inference time"),
         b"PyFuncStateless": (Severity.CRITICAL, "executes arbitrary Python at inference time"),
         b"EagerPyFunc": (Severity.CRITICAL, "executes arbitrary Python at inference time"),
+        # host filesystem read/write
         b"ReadFile": (Severity.HIGH, "reads arbitrary files from the host"),
         b"WriteFile": (Severity.HIGH, "writes arbitrary files on the host"),
         b"MatchingFiles": (Severity.MEDIUM, "enumerates host filesystem paths"),
+        # queue-based file readers — a served inference graph rarely needs them,
+        # and they open host paths (MEDIUM: unusual, not intrinsically exec).
+        b"WholeFileReaderV2": (Severity.MEDIUM, "reads whole files from the host"),
+        b"TextLineReaderV2": (Severity.MEDIUM, "reads text files from the host"),
+        b"FixedLengthRecordReaderV2": (Severity.MEDIUM, "reads records from host files"),
+        b"TFRecordReaderV2": (Severity.MEDIUM, "reads TFRecord files from the host"),
+        b"LMDBReader": (Severity.MEDIUM, "reads an LMDB database from the host"),
         b"DecodeJpeg": (Severity.INFO, "legitimate but expands attack surface"),
     }
 

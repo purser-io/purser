@@ -81,7 +81,20 @@ class CoreMLScanner(Scanner):
     def scan(self, path: Path) -> list[Finding]:
         data = path.read_bytes()
         findings: list[Finding] = []
-        for marker in (b"custom_layer", b"customLayer", b"custom_lib"):
+        # A CustomModel backend means the *entire* model is a developer-supplied
+        # implementation invoked at inference — stronger than a single custom layer.
+        for marker in (b"CustomModel", b"customModel", b"custom_model"):
+            if marker in data:
+                findings.append(self.finding(
+                    "COREML_CUSTOM_MODEL", Severity.HIGH,
+                    "CoreML model uses a CustomModel backend (arbitrary native code)",
+                    "A CustomModel runs a developer-supplied implementation at "
+                    "inference; verify the accompanying native code before trusting it.",
+                    tags=["native-code", "code-execution"],
+                    evidence={"marker": marker.decode()},
+                ))
+                break
+        for marker in (b"custom_layer", b"customLayer", b"custom_lib", b"CustomLayerParams"):
             if marker in data:
                 findings.append(self.finding(
                     "COREML_CUSTOM_LAYER", Severity.MEDIUM,

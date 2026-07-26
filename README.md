@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.3-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-237%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-240%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -109,13 +109,13 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | ExecuTorch | `.pte` | Flatbuffer identifier validation (extension spoofing) |
 | Keras | `.h5`, `.keras` v3 | `Lambda` / `TFOpLambda` layers (marshaled-bytecode execution) **and non-builtin custom layers** (external code runs on load — config walked for layer classes outside the Keras/TF namespaces); works without h5py via byte heuristic |
 | OpenVINO IR | `.xml` (+ `.bin`) | XXE / DOCTYPE-entity declarations, and graph references to host shared libraries (`.so`/`.dll`) or absolute paths (custom-extension code-load / host-access); XML parsed safely |
-| TensorFlow | SavedModel `.pb` | `PyFunc`/`EagerPyFunc` (code execution), `ReadFile`/`WriteFile` (file access) graph ops |
+| TensorFlow | SavedModel `.pb` | `PyFunc`/`EagerPyFunc` (code execution), `ReadFile`/`WriteFile`/`MatchingFiles` and queue-based file readers (host file access) graph ops |
 | TFLite | `.tflite` | Flex-delegate ops: `FlexPyFunc` (code execution), file-access kernels, full-TF attack surface; magic validation |
 | TF.js | `model.json` | Weight-shard path traversal / remote shard references |
 | ONNX | `.onnx` | Custom Python operator domains, external-data path traversal |
 | safetensors | `.safetensors` | Header validation (spoofed/malformed headers used against parser bugs) |
 | GGUF | `.gguf` | **Chat-template (Jinja SSTI) injection** — `__subclasses__`, `os.` access, dynamic code in templates |
-| CoreML | `.mlmodel` `.mlpackage` | Custom-layer markers (developer-supplied native code) |
+| CoreML | `.mlmodel` `.mlpackage` | `CustomModel` backend and custom-layer markers (developer-supplied native code) |
 | skops | `.skops` | Schema types run through the pickle dangerous/safe classifier; pickle-fallback loader nodes |
 | PaddlePaddle | `.pdmodel` `.pdparams` | `py_func`/`py_layer` ops (code execution); param files scanned as pickles |
 | PMML | `.pmml` | XXE entity declarations, Extension elements with script content |

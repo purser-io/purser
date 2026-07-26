@@ -11,7 +11,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(237 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(240 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -30,14 +30,17 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
    regression** (detection floor / FPR ceiling / evasion-recall) all ship in
    `benchmarks/`, with numbers published in `benchmarks/README.md`. Remaining:
    continued growth of the real-model corpus + trend publication.
-2. **Per-format scanner depth.** **Keras non-`Lambda` custom layers** and
-   **OpenVINO IR** graph parsing now ship (closing the biggest parts of the
-   ModelAudit parity gap). Remaining: `declared`-vs-`reachable` graph parsing for
-   TF SavedModel / Paddle / CoreML (TensorRT deep parse is infeasible without
-   loading the engine — format-ID + exfil is the right level there).
-3. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
+2. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
+
+*(Per-format scanner depth — formerly #2 — is now complete for what a static,
+no-load scanner can do: dedicated op / custom-code detection for pickle, Keras
+(incl. non-`Lambda` custom layers), ONNX, TF SavedModel, TFLite, GGUF, Paddle,
+CoreML (incl. `CustomModel`), and OpenVINO IR. True `declared`-vs-`reachable`
+dataflow reachability needs the framework's own graph semantics at model-load
+time, so — like TensorRT deep-parse and full pickle gadget-chain reachability —
+it is **out of scope** for a scanner that never loads the model.)*
 
 ---
 
@@ -51,7 +54,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 | Item | Notes |
 |---|---|
-| Per-format graph parsing (CoreML, TF, Paddle) | Detection for these is still marker/substring based, so it can't distinguish *declared* vs *reachable* ops. (**Keras** non-`Lambda` custom layers and **OpenVINO IR** now have dedicated depth; TensorRT/MXNet stay format-ID + exfil.) **ModelAudit** has deeper scanners for the remaining formats. |
+| Per-format op/custom-code depth | **Shipped** for every format where static analysis is feasible: pickle opcodes, Keras (incl. non-`Lambda` custom layers), ONNX, TF SavedModel (exec + host-I/O ops), TFLite, GGUF, Paddle (`py_func`), CoreML (`CustomModel` + custom layers), and OpenVINO IR. TensorRT/MXNet stay format-ID + exfil. The one thing left — `declared`-vs-`reachable` dataflow — is **out of scope** (see below). |
 | Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
 | More exfil encodings | UTF-16, base64/hex/base32/base85, one gzip/zlib layer, and **single-byte XOR** are covered — decoded blobs are only flagged when they resolve to a real endpoint/command indicator, so no rise in the false-positive rate (verified 0% over the real-model set). Remaining: **multi-byte / rolling-key XOR** (infeasible to key-recover generally). Note: the XOR path deliberately confirms only *structural* indicators (webhook/URL/code/private-key), not narrow-charset credential regexes, which alias with quantized weight bytes. |
 | Packed-binary C2 endpoints | Endpoints stored as packed bytes (no ASCII/UTF-16 form) aren't extracted; needs structured per-format parsing. |
@@ -88,6 +91,7 @@ live under *Candidates — detection depth* above.
 | Item | Why |
 |---|---|
 | Pickle gadget-chain reachability | *Heuristic* gadget-composition detection ships in the **`purser-deep`** companion (pivot primitives, complex graphs, deep imports). Full reachability/soundness is still infeasible statically; the robust guarantee remains the ban-pickle allowlist policy (`signed-only.yaml`). |
+| Graph `declared`-vs-`reachable` dataflow (TF / Paddle / CoreML / ONNX) | Purser flags **declared** dangerous ops / custom code (the conservative, safe choice for a gate). Pruning to only *reachable* ops needs the framework's own graph semantics at model-load — which a no-load scanner won't do. Flagging a declared dangerous op even if a particular graph prunes it is the intended, fail-safe behavior; deep runtime reachability is enterprise/dynamic-analysis territory. |
 | Weight *steganography / tampering* | Covered by **`purser-deep`** (`deep.weights`): hidden data in tensor low-bit planes, non-finite weights, size mismatches — static, no model load. |
 | Weight *behavioral* backdoors | Out of scope: detecting *trained* triggers / poisoning needs model-evaluation, not container/static analysis. Commercial platforms (see comparison chart) cover it. |
 | Determined / volumetric DoS | The concurrency cap, per-client rate limit, and per-file windowing bound resource use, but absorbing a determined flood is the job of an edge proxy / WAF / autoscaler, not the scanner. |
@@ -129,8 +133,10 @@ for per-release detail):
 - **Detection:** `trust_remote_code` AST scanner + `auto_map` config scanner;
   exfil UTF-16 / hex / base32 / base85 / gzip / single-byte-XOR decoding; configurable benign-host allowlist.
 - **Per-format depth:** Keras **non-`Lambda` custom-layer** detection (config walked
-  for layer classes outside the Keras/TF namespaces — external code on load) and
-  **OpenVINO IR** graph parsing (XXE / DOCTYPE-entity + external library/path refs).
+  for layer classes outside the Keras/TF namespaces — external code on load);
+  **OpenVINO IR** graph parsing (XXE / DOCTYPE-entity + external library/path refs);
+  broadened **TF SavedModel** host-I/O ops and **CoreML** `CustomModel`-backend
+  detection.
 - **Supply chain:** hash-pinned lockfiles + `--require-hashes`, split core/HF/deep
   Wolfi images, deterministic CycloneDX SBOM, `trivy` + `osv-scanner` CI gates,
   multi-arch `buildx` with SLSA provenance + SBOM attestations, cosign signing.

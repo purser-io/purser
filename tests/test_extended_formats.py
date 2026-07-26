@@ -164,6 +164,31 @@ def test_coreml_custom_layer(tmp_path: Path):
     assert any(f.rule_id == "COREML_CUSTOM_LAYER" for f in findings)
 
 
+def test_coreml_custom_model(tmp_path: Path):
+    p = make(tmp_path / "m.mlmodel", b"\x08\x05\x12\x20" + b"CustomModel" + b"\x00" * 16)
+    assert detect_format(p) == ModelFormat.COREML
+    _, findings = scan_file(p)
+    assert any(f.rule_id == "COREML_CUSTOM_MODEL" and f.severity == Severity.HIGH
+               for f in findings)
+
+
+def test_coreml_clean_no_custom(tmp_path: Path):
+    p = make(tmp_path / "m.mlmodel", b"\x08\x05\x12\x20" + b"innerProduct" + b"\x00" * 16)
+    _, findings = scan_file(p)
+    assert not [f for f in findings if f.rule_id.startswith("COREML_")]
+
+
+# -- TF SavedModel: broadened host-I/O op coverage ---------------------------
+
+def test_tf_file_reader_op(tmp_path: Path):
+    p = make(tmp_path / "saved_model.pb",
+             b"\x0a\x20somegraph" + b"WholeFileReaderV2" + b"\x00" * 16)
+    assert detect_format(p) == ModelFormat.TF_SAVEDMODEL
+    _, findings = scan_file(p)
+    assert any(f.rule_id == "TF_DANGEROUS_OP" and f.severity == Severity.MEDIUM
+               and "WholeFileReader" in f.evidence.get("op", "") for f in findings)
+
+
 # -- PMML --------------------------------------------------------------------
 
 def test_pmml_extension_script(tmp_path: Path):
