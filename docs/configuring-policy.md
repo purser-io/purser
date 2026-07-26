@@ -79,7 +79,7 @@ code-in-model attacks.
 `pickle`, `pytorch`, `pytorch_legacy`, `pt2`, `executorch`, `joblib`, `numpy`,
 `keras_h5`, `keras_v3`, `tf_savedmodel`, `tflite`, `tfjs`, `onnx`,
 `safetensors`, `gguf`, `ggml`, `coreml`, `skops`, `flax_msgpack`, `paddle`,
-`mxnet`, `openvino`, `pmml`, `gbm_native`, `python_source`, `hf_config`.
+`mxnet`, `openvino`, `pmml`, `gbm_native`, `tensorrt`, `python_source`, `hf_config`.
 </details>
 
 ### 3. Country of origin — `origin`
@@ -98,7 +98,7 @@ origin:
 - `unknown_origin` can be `allow`, `warn`, or `deny`.
 - Where does the country come from? In order: a **verified signature** →
   the `--origin` flag → a `provenance.yaml` file next to the model → a built-in
-  lookup of ~90 known publishers. See the country database with
+  lookup of ~70 known publishers. See the country database with
   `purser origins`.
 
 > **Important:** without signing (below), the country is a *claim*, not proof.
@@ -116,6 +116,22 @@ origin:
 
 This is what turns country-of-origin from a label into an enforced rule. Setup
 is in the [DevSecOps guide](devsecops-gitlab.md#step-7--enforce-trusted-models-optional-advanced).
+
+**Verified signer identity — `identity`.** When a model carries a verified
+**Sigstore** (Fulcio/Rekor) bundle, its signer identity — the OIDC issuer and
+subject (SAN) — is checked against an allow/blocklist, and a verified identity
+also satisfies `require_signed`.
+
+```yaml
+identity:
+  mode: allowlist            # off | allowlist | blocklist
+  issuers: ["https://token.actions.githubusercontent.com"]
+  identities: ["https://github.com/purser-io/*"]   # SAN globs
+```
+
+Needs the `purser[sigstore]` extra; verification is offline against a vendored
+trust root. See
+[Verified identity via Sigstore](../README.md#verified-identity-via-sigstore-external-trust-root).
 
 ### 5. Who published it — `publishers`
 
@@ -179,7 +195,7 @@ Your policy produces one **verdict**, which also sets the command's exit code
 | PASS | No concerns. | 0 |
 | WARN | Minor findings only. | 0 |
 | FAIL | A finding at/above your `fail_on` severity. | 1 |
-| BLOCKED | A rule (format / origin / publisher / name / signing) rejected it. | 2 |
+| BLOCKED | A rule (format / origin / publisher / name / signing / identity) rejected it. | 2 |
 | ERROR | Couldn't scan (bad path, etc.). | 3 |
 
 ---
@@ -263,6 +279,11 @@ origin:
 publishers:
   blocked: [some-org]
   allowed: []                # non-empty => only these allowed
+
+identity:                    # verified Sigstore signer identity
+  mode: off                  # off | allowlist | blocklist
+  issuers: []                # OIDC issuers (globs ok)
+  identities: []             # SAN globs
 
 models:
   mode: blocklist            # off | allowlist | blocklist

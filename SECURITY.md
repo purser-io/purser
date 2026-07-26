@@ -55,8 +55,10 @@ gate.
    configured; `/healthz` and `/metrics` are open by design (network-restrict
    `/metrics`, or disable it with `PURSER_METRICS_ENABLED=0`; it exposes only
    aggregate counters, no model content or paths).
-3. *Signer → trust store.* Provenance is only as trustworthy as the keys an
-   operator places in the trust store (an operator-managed root today).
+3. *Signer → trust root.* For the Ed25519 path, provenance is only as
+   trustworthy as the keys an operator places in the trust store; for the
+   Sigstore path, it derives from a verified external root (Fulcio/Rekor) via
+   the transparency log.
 
 **Primary guarantee — models are never executed or extracted:**
 - Pickle streams are parsed statically with `pickletools.genops`

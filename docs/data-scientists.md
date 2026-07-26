@@ -137,9 +137,11 @@ from a trusted source:
 purser verify ./model.safetensors
 ```
 
-A `VERIFIED` result means the file matches a signature from a key your
-organization trusts (and tells you the publisher and country of origin). Ask
-your DevSecOps team whether signing is set up — they own the
+`purser verify` reports two provenance checks: the **Ed25519 trust store**
+(matches the file to a signature from a key your organization trusts, with its
+publisher and country) and, if a **Sigstore** bundle is present, the verified
+**signer identity** (issuer + subject). A `VERIFIED` on either is trusted
+provenance. Ask your DevSecOps team whether signing is set up — they own the
 [setup](devsecops-gitlab.md).
 
 ---

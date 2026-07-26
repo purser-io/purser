@@ -213,7 +213,7 @@ rules:                      # per-rule overrides
 
 **Country of origin** is resolved in order: **a verified signature** (see
 below) → explicit `--origin` flag / API field → sidecar `provenance.yaml` next
-to the model → publisher lookup in the bundled database of ~90 known model
+to the model → publisher lookup in the bundled database of ~70 known model
 publishers (`purser origins`), extendable via
 `PURSER_ORIGINS=/path/origins.yaml`. Unknown origins are allowed, warned, or
 denied per policy.
