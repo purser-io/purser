@@ -10,7 +10,7 @@ CORE_IMAGE  := $(REGISTRY)$(IMAGE):$(TAG)
 HF_IMAGE    := $(REGISTRY)$(IMAGE)-hf:$(TAG)
 VERSION     := $(shell python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 
-.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest
+.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest sigstore-trust-root
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -47,6 +47,11 @@ licenses: sbom ## Regenerate THIRD_PARTY_LICENSES.md from the SBOMs
 
 base-digest: ## Print the current Wolfi base manifest digest (to update the pin)
 	@docker buildx imagetools inspect cgr.dev/chainguard/wolfi-base:latest --format '{{.Manifest.Digest}}'
+
+sigstore-trust-root: ## Refresh the vendored Sigstore trust root (needs purser[sigstore] + network)
+	@python -c "from sigstore.models import ClientTrustConfig, DEFAULT_TUF_URL; \
+open('src/purser/data/sigstore_trusted_root.json','w').write(ClientTrustConfig.from_tuf(DEFAULT_TUF_URL).trusted_root._inner.to_json()); \
+print('refreshed src/purser/data/sigstore_trusted_root.json')"
 
 build: ## Build the slim core image (hash-verified deps, no HuggingFace)
 	docker build -t $(CORE_IMAGE) -f Dockerfile .

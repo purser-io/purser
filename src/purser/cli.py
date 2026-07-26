@@ -254,16 +254,30 @@ def verify(
     trust_store: str = typer.Option(None, "--trust-store", "-t",
                                     help="Path to trust_store.yaml"),
 ):
-    """Verify a model's signature against the trust store."""
+    """Verify a model's provenance: the Ed25519 trust store and/or a Sigstore
+    (Fulcio/Rekor) bundle. Exits 0 if either verifies."""
+    from purser.core.sigstore_verify import verify as verify_sigstore
+
+    def _style(status: str, ok: bool) -> str:
+        return "bold green" if ok else ("yellow" if status == "unsigned" else "bold red")
+
     store = load_trust_store(trust_store) if trust_store else load_trust_store()
     result = verify_target(Path(target), store)
-    style = "bold green" if result.verified else "bold red"
-    console.print(f"[{style}]{result.status.upper()}[/]: {result.reason}")
+    console.print(f"Ed25519 trust store — [{_style(result.status, result.verified)}]"
+                  f"{result.status.upper()}[/]: {result.reason}")
     if result.verified:
         console.print(f"  key_id:    {result.key_id}")
         console.print(f"  publisher: {result.publisher}")
         console.print(f"  origin:    {result.origin}")
-    raise typer.Exit(0 if result.verified else 1)
+
+    ident = verify_sigstore(Path(target))
+    console.print(f"Sigstore identity — [{_style(ident.status, ident.verified)}]"
+                  f"{ident.status.upper()}[/]: {ident.reason}")
+    if ident.verified:
+        console.print(f"  issuer:   {ident.issuer}")
+        console.print(f"  identity: {ident.identity}")
+
+    raise typer.Exit(0 if (result.verified or ident.verified) else 1)
 
 
 @app.command()

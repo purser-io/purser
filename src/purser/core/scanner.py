@@ -14,6 +14,8 @@ from purser.core.findings import FileResult, Finding, ScanReport, Severity, Verd
 from purser.core.formats import MODEL_EXTS, looks_like_binary_model
 from purser.core.policy import Policy
 from purser.core.provenance import resolve as resolve_provenance
+from purser.core.sigstore_verify import IdentityResult
+from purser.core.sigstore_verify import verify as verify_sigstore
 from purser.core.signing import VerificationResult, verify_target
 
 
@@ -43,6 +45,27 @@ def _signature_findings(result: VerificationResult) -> list[Finding]:
         tags=["provenance"],
         evidence={"key_id": result.key_id, "status": result.status},
     )]
+
+def _sigstore_findings(result: IdentityResult) -> list[Finding]:
+    """A present-but-invalid Sigstore bundle is a finding; an absent bundle
+    ('unsigned') or a verified one is not — policy decides whether an unsigned
+    model is acceptable via `origin.require_signed`."""
+    if result.status in ("verified", "unsigned"):
+        return []
+    sev = {"invalid": Severity.HIGH, "unavailable": Severity.LOW}.get(
+        result.status, Severity.MEDIUM)
+    return [Finding(
+        rule_id=f"SIGSTORE_{result.status.upper()}",
+        severity=sev,
+        title=f"Sigstore verification {result.status}: {result.reason}",
+        detail="A Sigstore bundle is present but its signer identity could not "
+               "be verified against the trust root.",
+        scanner="sigstore",
+        tags=["provenance"],
+        evidence={"issuer": result.issuer, "identity": result.identity,
+                  "status": result.status},
+    )]
+
 
 SKIP_NAMES = {".git", ".DS_Store", "__pycache__", ".cache"}
 # Files never worth scanning as models but common in model repos.
@@ -126,12 +149,34 @@ def scan_target(
     # self-asserted origin/publisher; an *invalid* signature is a finding.
     sig_result = verify_target(target)
     report.signature_findings = _signature_findings(sig_result)
+    # Verified-external-root identity (Sigstore/Fulcio/Rekor). Cheap when no
+    # bundle is present (returns 'unsigned' before importing sigstore).
+    id_result = verify_sigstore(target)
+    report.signature_findings += _sigstore_findings(id_result)
+    report.metadata["signature_status"] = sig_result.status
+    report.metadata["sigstore_status"] = id_result.status
+
     if sig_result.verified:
         report.origin = sig_result.origin
         report.publisher = sig_result.publisher
         report.provenance_verified = True
         report.metadata["provenance_source"] = "signed"
         report.metadata["signature_key_id"] = sig_result.key_id
+    elif id_result.verified:
+        # Verified identity from an external root. Country of origin is not
+        # implied by an identity, so origin/publisher still resolve via the
+        # provenance chain; the verified identity is authoritative for
+        # `require_signed` and the `identity` policy.
+        report.provenance_verified = True
+        report.metadata["provenance_source"] = "sigstore"
+        report.metadata["identity"] = id_result.identity
+        report.metadata["identity_issuer"] = id_result.issuer
+        prov = resolve_provenance(
+            target=target, explicit_origin=origin,
+            publisher=publisher, repo_id=repo_id,
+        )
+        report.origin = prov.origin
+        report.publisher = prov.publisher
     else:
         prov = resolve_provenance(
             target=target, explicit_origin=origin,
@@ -141,7 +186,6 @@ def scan_target(
         report.publisher = prov.publisher
         report.provenance_verified = False
         report.metadata["provenance_source"] = prov.source
-    report.metadata["signature_status"] = sig_result.status
 
     for path in iter_scannable(target):
         try:

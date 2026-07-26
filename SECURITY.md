@@ -161,10 +161,12 @@ Secret.
   the key's validity window.
 - **Fails closed:** if `cryptography` is absent, verification returns
   `unavailable`, so a `require_signed` policy blocks rather than passes.
-- **Trust root caveat:** the key→publisher→country binding is an **operator
-  assertion** in the local trust store — integrity + key-attested identity, not a
-  transparency-log-backed PKI. External-root integration (Sigstore/Fulcio+Rekor)
-  is on the roadmap.
+- **Trust root caveat:** the Ed25519 key→publisher→country binding is an
+  **operator assertion** in the local trust store — integrity + key-attested
+  identity, not a transparency-log-backed PKI. For a **verified external root**,
+  Purser also verifies **Sigstore (Fulcio/Rekor)** bundles — identity from a
+  transparency-log-backed OIDC subject, verified offline against a vendored trust
+  root, gated by the `identity` policy (see `core/sigstore_verify.py`).
 
 ---
 

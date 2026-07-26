@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.3-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-211%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-223%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -160,8 +160,9 @@ policy/provenance.
 *all* file types — Purser's most distinctive engine; peers focus on code, not
 exfiltration strings.
 ⁴ Purser verifies **user-signed** Ed25519 signatures against a trust store that
-binds keys to publisher + country (with revocation/validity). Commercial tools track
-provenance/lineage (AIBOM) but not user-controlled signature verification.
+binds keys to publisher + country (with revocation/validity), **and Sigstore
+(Fulcio/Rekor) bundles** for verified external-root identity (offline). Commercial
+tools track provenance/lineage (AIBOM) but not user-controlled signature verification.
 
 **Honest take:** Purser's edge is the combination of broad format coverage, the
 exfiltration engine, `trust_remote_code` AST analysis, and a **policy + verified-
@@ -252,6 +253,39 @@ timestamp). Set `origin: { require_signed: true }` in a policy (see
 `signed-only.yaml`) to **reject anything not validly signed by a trusted key** —
 this is what turns country-of-origin from a label into an enforced control.
 
+### Verified identity via Sigstore (external trust root)
+
+The Ed25519 trust store binds `key → publisher` by *operator assertion*. For a
+**verified external root**, Purser also verifies **Sigstore** (Fulcio/Rekor)
+bundles: identity comes from a Fulcio-attested OIDC subject logged in Rekor's
+transparency log — the same keyless model the project uses to sign its *own*
+artifacts, and the format HuggingFace model-signing emits. Verification is
+**offline**, against a vendored trust root (no network at scan time).
+
+```bash
+pip install "purser[sigstore]"
+# sign externally with cosign/sigstore (keyless OIDC), producing a bundle:
+cosign sign-blob model.safetensors --bundle model.safetensors.sigstore.json
+purser verify model.safetensors     # reports the verified issuer + identity (SAN)
+```
+
+Place the bundle beside the model (`<file>.sigstore.json`, or
+`model.sigstore.json` in a directory — signed over the canonical manifest). A
+verified identity satisfies `require_signed`, and an `identity` policy pins *who*
+may sign (issuer + SAN globs):
+
+```yaml
+identity:
+  mode: allowlist                 # off | allowlist | blocklist
+  issuers: ["https://token.actions.githubusercontent.com"]
+  identities: ["https://github.com/purser-io/*"]   # SAN globs
+```
+
+Refresh the vendored trust root if Sigstore rotates its roots:
+`make sigstore-trust-root` (needs `purser[sigstore]` + network). Signing stays
+external — keyless signing needs a browser/OIDC flow. Legacy HuggingFace **GPG
+commit** signatures are online-only and out of scope for the offline scanner.
+
 ## Install and CLI usage
 
 ```bash
@@ -313,6 +347,7 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_AUDIT` | `off` | `stdout` or `syslog` to emit a JSON audit record per scan. |
 | `PURSER_SYSLOG_ADDRESS` | `/dev/log` | Syslog target when `PURSER_AUDIT=syslog`: a socket path or `host:port` (UDP). |
 | `PURSER_SYSLOG_FACILITY` | `user` | Syslog facility name. |
+| `PURSER_SIGSTORE_TRUST_ROOT` | *(vendored)* | Path to a Sigstore `trusted_root.json` for offline verification; defaults to the bundled root (`make sigstore-trust-root` to refresh). |
 
 ## Observability
 

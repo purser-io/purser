@@ -19,6 +19,9 @@ dependencies = [
 hf = ["huggingface_hub>=0.23"]
 h5 = ["h5py>=3.10"]
 sign = ["cryptography>=42"]
+# Sigstore (Fulcio/Rekor) verified-identity provenance. Verification only;
+# offline against a vendored trust root. Heavy tree, hence its own extra.
+sigstore = ["sigstore>=4,<5"]
 # Deep companion analyzers (gadget-chain + weight tampering). No extra runtime
 # deps — the analyzers are stdlib-only and reuse the core engines.
 deep = []

@@ -9,8 +9,9 @@ container images and a signed Helm chart on GHCR, built and published by CI). Th
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
-deploy-time admission enforcement, and a gated validation benchmark (incl. an
-adversarial evasion suite) are all shipped (211 tests). What remains is **not** bug-fixing — it is maturity, reach,
+deploy-time admission enforcement, Sigstore verified-identity provenance, and a
+gated validation benchmark (incl. an adversarial evasion suite) are all shipped
+(223 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -29,13 +30,9 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
    regression** (detection floor / FPR ceiling / evasion-recall) all ship in
    `benchmarks/`, with numbers published in `benchmarks/README.md`. Remaining:
    continued growth of the real-model corpus + trend publication.
-2. **External PKI / transparency trust root.** The largest remaining *trust*
-   improvement for **model** provenance — move it from operator-asserted keys to a
-   verified root (Sigstore Fulcio/Rekor or HuggingFace commit signatures). Note:
-   Purser's own *artifacts* are already cosign-keyless-signed via Fulcio/Rekor.
-3. **Per-format scanner depth (TensorRT, OpenVINO, non-`Lambda` Keras).** Closes
+2. **Per-format scanner depth (TensorRT, OpenVINO, non-`Lambda` Keras).** Closes
    the one area where the OSS peer **ModelAudit** leads (per the comparison chart).
-4. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
+3. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
 
@@ -45,7 +42,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 | Item | Notes |
 |---|---|
-| **External PKI / transparency trust root** | Model signing today is Ed25519 + a local trust store binding key→publisher→country — integrity and key-attested identity, but the key→identity binding is an operator assertion. Integrate Sigstore (Fulcio/Rekor) or HuggingFace commit-signature verification so identity derives from a verified external root. |
+| **External PKI — remaining** | **Sigstore (Fulcio/Rekor) verification shipped** (`core/sigstore_verify.py`, offline against a vendored trust root; `identity` policy). Remaining: HuggingFace **GPG commit-signature** verification (online-only — a downloaded snapshot has no `.git` — so a lower-priority companion to the Sigstore path, which already covers HF's *Sigstore-based* model signing); and optionally an in-tool keyless signer (today signing is external via cosign/sigstore, which need a browser OIDC flow). |
 
 ## Candidates — detection depth
 
@@ -123,7 +120,10 @@ for per-release detail):
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.
 - **Provenance:** Ed25519 model signing + trust store, `require_signed` policy,
-  and key **revocation / validity windows**.
+  and key **revocation / validity windows**; **Sigstore (Fulcio/Rekor) verified
+  identity** — offline bundle verification against a vendored trust root, with an
+  `identity` (issuer/SAN) policy — moving the key→identity binding from an
+  operator assertion to a verified external root.
 - **Detection:** `trust_remote_code` AST scanner + `auto_map` config scanner;
   exfil UTF-16 / hex / base32 / base85 / gzip / single-byte-XOR decoding; configurable benign-host allowlist.
 - **Supply chain:** hash-pinned lockfiles + `--require-hashes`, split core/HF/deep

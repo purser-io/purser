@@ -53,6 +53,13 @@ class PolicyError(ValueError):
     """Raised for invalid policy documents."""
 
 
+def _id_match(value: str | None, patterns: list[str]) -> bool:
+    """True if a Sigstore issuer/SAN matches any pattern (exact or fnmatch glob)."""
+    if not value or not patterns:
+        return False
+    return any(value == p or fnmatch.fnmatch(value, p) for p in patterns)
+
+
 def _model_names(report: ScanReport) -> set[str]:
     """Lowercased identifiers a model-name policy matches against: the repo id
     (full and last component) and the scan target's basename."""
@@ -89,6 +96,9 @@ class Policy:
     require_signed: bool = False         # require cryptographically verified provenance
     publishers_blocked: list[str] = field(default_factory=list)
     publishers_allowed: list[str] = field(default_factory=list)
+    identity_mode: str = "off"           # off | allowlist | blocklist (Sigstore identity)
+    identity_issuers: list[str] = field(default_factory=list)   # OIDC issuers (globs ok)
+    identity_patterns: list[str] = field(default_factory=list)  # SAN globs
     models_mode: str = "off"             # off | allowlist | blocklist
     models_patterns: list[str] = field(default_factory=list)
     max_file_size_mb: int = 0            # 0 = unlimited
@@ -141,6 +151,16 @@ class Policy:
         p.publishers_blocked = [str(x).lower() for x in publishers.get("blocked", [])]
         p.publishers_allowed = [str(x).lower() for x in publishers.get("allowed", [])]
 
+        identity = doc.get("identity") or {}
+        p.identity_mode = _mode(identity.get("mode", "off"))
+        if p.identity_mode not in ("off", "allowlist", "blocklist"):
+            raise PolicyError(f"identity.mode must be off|allowlist|blocklist, got {p.identity_mode}")
+        p.identity_issuers = [str(x) for x in identity.get("issuers", [])]
+        p.identity_patterns = [str(x) for x in identity.get("identities", [])]
+        if p.identity_mode != "off" and not (p.identity_issuers or p.identity_patterns):
+            raise PolicyError(
+                "identity.issuers or identity.identities must be non-empty when identity.mode is set")
+
         models = doc.get("models") or {}
         p.models_mode = _mode(models.get("mode", "off"))
         if p.models_mode not in ("off", "allowlist", "blocklist"):
@@ -183,6 +203,33 @@ class Policy:
                 "model is not validly signed by a trusted key",
                 f"signature status: {report.metadata.get('signature_status', 'unknown')}",
             ))
+
+        # -- verified-identity restrictions (Sigstore external root)
+        # Applies only to a model that carries a *verified* signer identity;
+        # whether an identity must be present at all is governed by
+        # `require_signed`. allowlist => issuer AND SAN must match; blocklist =>
+        # issuer OR SAN match is denied.
+        if self.identity_mode != "off":
+            ident = report.metadata.get("identity")
+            issuer = report.metadata.get("identity_issuer")
+            if ident is not None or issuer is not None:
+                if self.identity_mode == "allowlist":
+                    permitted = (
+                        (not self.identity_issuers or _id_match(issuer, self.identity_issuers))
+                        and (not self.identity_patterns or _id_match(ident, self.identity_patterns))
+                    )
+                else:  # blocklist
+                    permitted = not (
+                        _id_match(issuer, self.identity_issuers)
+                        or _id_match(ident, self.identity_patterns)
+                    )
+                if not permitted:
+                    blocked = True
+                    policy_findings.append(self._pf(
+                        "POLICY_IDENTITY_BLOCKED", Severity.HIGH,
+                        f"Verified signer identity is not permitted by policy `{self.name}`",
+                        f"issuer: {issuer or '—'} · identity: {ident or '—'}",
+                    ))
 
         # -- origin restrictions
         origin = (report.origin or "").upper() or None
@@ -339,6 +386,11 @@ class Policy:
             "publishers": {
                 "blocked": self.publishers_blocked,
                 "allowed": self.publishers_allowed,
+            },
+            "identity": {
+                "mode": self.identity_mode,
+                "issuers": self.identity_issuers,
+                "identities": self.identity_patterns,
             },
             "models": {
                 "mode": self.models_mode,

@@ -1,0 +1,41 @@
+# Sigstore verified-identity provenance (roadmap item 2). Runs the sigstore
+# test module with the `[sigstore]` extra installed, and — on trusted (non-fork)
+# runs where GitHub grants an OIDC token — exercises a REAL keyless sign + an
+# OFFLINE verify against the vendored trust root. That real test also acts as a
+# drift signal: it fails if the vendored trust root has gone stale vs production.
+name: Sigstore
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # ambient OIDC for the keyless-signing roundtrip
+
+concurrency:
+  group: sigstore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - name: Install (dev + sign + sigstore)
+        run: |
+          uv venv --clear
+          uv pip install -e ".[dev,sign,sigstore]"
+      # Module + policy + the real keyless roundtrip. The roundtrip skips
+      # automatically when no ambient OIDC identity is available (e.g. fork PRs).
+      - name: Sigstore verification tests
+        run: uv run pytest tests/test_sigstore.py -q
