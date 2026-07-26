@@ -16,8 +16,8 @@ jobs:
     # repos needs GitHub Advanced Security. Dormant until the repo is public.
     if: github.event.repository.visibility == 'public'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0
