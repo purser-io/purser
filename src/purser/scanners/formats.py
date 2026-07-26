@@ -72,8 +72,92 @@ class PyTorchScanner(Scanner):
         return findings
 
 
+# Keras layer taxonomy for custom-layer detection (roadmap: per-format depth).
+# Keras v3 configs carry a `module` per node — anything outside these namespaces
+# is custom code that runs on load. Legacy H5 configs have no `module`, so we
+# fall back to a builtin class-name allowlist.
+_KERAS_SAFE_TOP_MODULES = frozenset({
+    "keras", "tensorflow", "tf_keras", "keras_core", "keras_cv", "keras_nlp",
+    "keras_hub", "tf",
+    # widely-used, framework-trusted layer providers (loading them is expected)
+    "transformers", "tensorflow_hub", "tensorflow_addons", "official", "tfa",
+})
+_KERAS_CONTAINER_CLASSES = frozenset({"Sequential", "Functional", "Model", "InputLayer"})
+_KERAS_BUILTIN_LAYERS = frozenset({
+    # core / dense / embedding
+    "Dense", "Activation", "Embedding", "Masking", "Flatten", "Reshape", "Permute",
+    "RepeatVector", "Identity", "Dropout", "SpatialDropout1D", "SpatialDropout2D",
+    "SpatialDropout3D", "ActivityRegularization",
+    # convolution
+    "Conv1D", "Conv2D", "Conv3D", "Conv1DTranspose", "Conv2DTranspose", "Conv3DTranspose",
+    "Convolution1D", "Convolution2D", "Convolution3D", "SeparableConv1D", "SeparableConv2D",
+    "DepthwiseConv1D", "DepthwiseConv2D", "Cropping1D", "Cropping2D", "Cropping3D",
+    "UpSampling1D", "UpSampling2D", "UpSampling3D", "ZeroPadding1D", "ZeroPadding2D",
+    "ZeroPadding3D",
+    # pooling
+    "MaxPooling1D", "MaxPooling2D", "MaxPooling3D", "AveragePooling1D", "AveragePooling2D",
+    "AveragePooling3D", "GlobalMaxPooling1D", "GlobalMaxPooling2D", "GlobalMaxPooling3D",
+    "GlobalAveragePooling1D", "GlobalAveragePooling2D", "GlobalAveragePooling3D",
+    "MaxPool1D", "MaxPool2D", "MaxPool3D", "AvgPool1D", "AvgPool2D", "AvgPool3D",
+    "GlobalMaxPool1D", "GlobalMaxPool2D", "GlobalMaxPool3D", "GlobalAvgPool1D",
+    "GlobalAvgPool2D", "GlobalAvgPool3D",
+    # recurrent / attention / wrappers
+    "LSTM", "GRU", "SimpleRNN", "RNN", "Bidirectional", "TimeDistributed", "ConvLSTM1D",
+    "ConvLSTM2D", "ConvLSTM3D", "LSTMCell", "GRUCell", "SimpleRNNCell", "StackedRNNCells",
+    "MultiHeadAttention", "Attention", "AdditiveAttention",
+    # normalization
+    "BatchNormalization", "LayerNormalization", "UnitNormalization", "GroupNormalization",
+    # merging
+    "Add", "Subtract", "Multiply", "Average", "Maximum", "Minimum", "Concatenate", "Dot",
+    # activations
+    "ReLU", "LeakyReLU", "PReLU", "ELU", "ThresholdedReLU", "Softmax",
+    # regularization / noise
+    "GaussianDropout", "GaussianNoise", "AlphaDropout",
+    # preprocessing / normalization (keras 3)
+    "Normalization", "Discretization", "CategoryEncoding", "Hashing", "StringLookup",
+    "IntegerLookup", "TextVectorization", "Rescaling", "Resizing", "CenterCrop",
+    "RandomFlip", "RandomRotation", "RandomZoom", "RandomTranslation", "RandomCrop",
+    "RandomContrast", "RandomBrightness", "RandomHeight", "RandomWidth",
+})
+
+
+def _keras_module_safe(module: str | None) -> bool:
+    if not module:
+        return False
+    return module.split(".", 1)[0] in _KERAS_SAFE_TOP_MODULES
+
+
+def _keras_is_custom(class_name: str, module: str | None) -> bool:
+    """True if a layer requires non-builtin code to deserialize."""
+    if class_name in _KERAS_CONTAINER_CLASSES:
+        return False
+    if module is not None:                       # keras v3: trust the module field
+        return not _keras_module_safe(module)
+    return class_name not in _KERAS_BUILTIN_LAYERS  # legacy H5: builtin allowlist
+
+
+def _keras_walk(doc, depth: int = 0, budget: list[int] | None = None):
+    """Yield (class_name, module|None, registered_name) for every object node."""
+    if budget is None:
+        budget = [5000]
+    if depth > 100 or budget[0] <= 0:
+        return
+    if isinstance(doc, dict):
+        cn = doc.get("class_name")
+        if isinstance(cn, str):
+            budget[0] -= 1
+            mod = doc.get("module")
+            yield cn, (mod if isinstance(mod, str) else None), doc.get("registered_name")
+        for v in doc.values():
+            yield from _keras_walk(v, depth + 1, budget)
+    elif isinstance(doc, list):
+        for v in doc:
+            yield from _keras_walk(v, depth + 1, budget)
+
+
 class KerasH5Scanner(Scanner):
-    """HDF5 Keras models: Lambda layers carry marshaled Python bytecode."""
+    """HDF5 Keras models: Lambda layers carry marshaled Python bytecode; custom
+    (non-builtin) layers require external code to deserialize."""
 
     name = "keras_h5"
 
@@ -81,18 +165,8 @@ class KerasH5Scanner(Scanner):
         config = self._read_model_config(path)
         if config is not None:
             return self._scan_config_json(config)
-        # Fallback: byte-level heuristic when h5py is unavailable.
-        data = path.read_bytes()
-        findings: list[Finding] = []
-        if b'"class_name": "Lambda"' in data or b'"class_name":"Lambda"' in data:
-            findings.append(self.finding(
-                "KERAS_LAMBDA_LAYER", Severity.CRITICAL,
-                "Keras Lambda layer detected (arbitrary code on load)",
-                "Lambda layers deserialize marshaled Python bytecode and execute "
-                "it when the model is loaded or run.",
-                tags=["code-execution"],
-            ))
-        return findings
+        # h5py unavailable: sweep the embedded config bytes.
+        return self._scan_config_bytes(path.read_bytes())
 
     def _read_model_config(self, path: Path) -> str | None:
         try:
@@ -108,16 +182,73 @@ class KerasH5Scanner(Scanner):
         except Exception:
             return None
 
+    def _lambda_finding(self, cls: str) -> Finding:
+        return self.finding(
+            "KERAS_LAMBDA_LAYER", Severity.CRITICAL,
+            f"Keras {cls} layer detected (arbitrary code on load)",
+            "Lambda layers deserialize marshaled Python bytecode and execute it "
+            "when the model is loaded or run.",
+            tags=["code-execution"])
+
     def _scan_config_json(self, config: str) -> list[Finding]:
         findings: list[Finding] = []
-        for m in re.finditer(r'"class_name":\s*"(Lambda|TFOpLambda)"', config):
-            findings.append(self.finding(
-                "KERAS_LAMBDA_LAYER", Severity.CRITICAL,
-                f"Keras {m.group(1)} layer detected (arbitrary code on load)",
-                "Lambda layers deserialize marshaled Python bytecode and execute "
-                "it when the model is loaded or run.",
-                tags=["code-execution"],
-            ))
+        try:
+            doc = json.loads(config)
+        except (json.JSONDecodeError, ValueError):
+            # Unparseable config — fall back to the Lambda substring heuristic.
+            for m in re.finditer(r'"class_name":\s*"(Lambda|TFOpLambda)"', config):
+                findings.append(self._lambda_finding(m.group(1)))
+            return findings
+
+        seen: set[tuple[str, str]] = set()
+        for cls, module, _registered in _keras_walk(doc):
+            if len(findings) >= 200:
+                break
+            if cls in ("Lambda", "TFOpLambda"):
+                if ("lambda", "") in seen:
+                    continue
+                seen.add(("lambda", ""))
+                findings.append(self._lambda_finding(cls))
+            elif _keras_is_custom(cls, module):
+                key = (cls, module or "")
+                if key in seen:
+                    continue
+                seen.add(key)
+                findings.append(self._custom_finding(cls, module))
+        return findings
+
+    def _custom_finding(self, cls: str, module: str | None) -> Finding:
+        where = f" from module `{module}`" if module else ""
+        return self.finding(
+            "KERAS_CUSTOM_LAYER", Severity.MEDIUM,
+            f"Custom Keras layer `{cls}`{where} — external code runs on load",
+            "Deserializing a non-builtin Keras layer imports and instantiates its "
+            "class, running that code when the model is loaded (similar to "
+            "trust_remote_code). Verify the providing package is trusted.",
+            tags=["code-execution", "provenance"],
+            evidence={"class_name": cls, "module": module or ""})
+
+    def _scan_config_bytes(self, data: bytes) -> list[Finding]:
+        """h5py-less fallback: the model_config JSON is embedded in the HDF5
+        bytes as a string, so sweep it for layer class names and classify with
+        the legacy (module-less) builtin allowlist."""
+        text = data.decode("latin1", "replace")
+        findings: list[Finding] = []
+        seen: set[str] = set()
+        for m in re.finditer(r'"class_name":\s*"([A-Za-z0-9_.]{1,80})"', text):
+            cls = m.group(1)
+            if len(findings) >= 200:
+                break
+            if cls in ("Lambda", "TFOpLambda"):
+                if "\x00lambda" in seen:
+                    continue
+                seen.add("\x00lambda")
+                findings.append(self._lambda_finding(cls))
+            elif _keras_is_custom(cls, None):
+                if cls in seen:
+                    continue
+                seen.add(cls)
+                findings.append(self._custom_finding(cls, None))
         return findings
 
 
@@ -352,4 +483,67 @@ class NumpyScanner(Scanner):
             for f in PickleScanner().scan_bytes(payload, source=name):
                 f.evidence["member"] = name
                 findings.append(f)
+        return findings
+
+
+class OpenVINOScanner(Scanner):
+    """OpenVINO IR (.xml graph): XXE-safe structural parse. Flags DOCTYPE/entity
+    declarations (XXE / entity-expansion) and references to external shared
+    libraries or host paths (custom-extension code-load / call-home vectors).
+    Weights live in the sibling `.bin`, which the exfil engine scans."""
+
+    name = "openvino"
+    _MAX = 64 * 1024 * 1024
+    _LIB_RE = re.compile(r"\.(?:so|dll|dylib)(?:\.\d+)*$", re.IGNORECASE)
+
+    def scan(self, path: Path) -> list[Finding]:
+        findings: list[Finding] = []
+        try:
+            text = path.read_bytes()[: self._MAX].decode("utf-8", "replace")
+        except OSError:
+            return findings
+
+        # A DOCTYPE/entity in an IR is never legitimate and is the XXE / billion-
+        # laughs vector — flag and refuse to parse further.
+        if re.search(r"<!DOCTYPE|<!ENTITY", text):
+            return [self.finding(
+                "OPENVINO_XXE", Severity.HIGH,
+                "OpenVINO IR contains a DOCTYPE/ENTITY declaration",
+                "Standard IR carries no DTD; entity declarations enable XML "
+                "external-entity (XXE) or entity-expansion attacks on a parser.",
+                tags=["evasion", "xxe"])]
+
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            return [self.finding(
+                "OPENVINO_MALFORMED", Severity.LOW,
+                "OpenVINO IR .xml is not well-formed XML", tags=["evasion"])]
+
+        seen: set[str] = set()
+        for el in root.iter():
+            values = list(el.attrib.values())
+            if el.text:
+                values.append(el.text)
+            for val in values:
+                v = (val or "").strip()
+                if not v or len(v) > 4096 or v in seen:
+                    continue
+                is_lib = bool(self._LIB_RE.search(v))
+                # Leave URLs to the exfil engine; flag libs + host/traversal paths.
+                if is_lib or (_path_escapes(v) and "://" not in v):
+                    seen.add(v)
+                    findings.append(self.finding(
+                        "OPENVINO_EXTERNAL_REF",
+                        Severity.HIGH if is_lib else Severity.MEDIUM,
+                        f"OpenVINO IR references an external "
+                        f"{'library' if is_lib else 'path'}: {v[:120]}",
+                        "A model graph should not reference host shared libraries "
+                        "or absolute/traversal paths — a custom-extension (code "
+                        "load) or host-access vector.",
+                        tags=["code-execution"] if is_lib else ["file-access"],
+                        evidence={"ref": v[:200]}))
+                    if len(findings) >= 100:
+                        return findings
         return findings

@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.3-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-223%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-237%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -107,7 +107,8 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | Pickle opcode analysis | `.pkl` `.pt` `.pth` `.bin` `.ckpt` `.joblib` `.dill` `.pdparams` | Dangerous imports (`os`, `subprocess`, `eval`, `socket`, `requests`, …) via GLOBAL **and** STACK_GLOBAL resolution, multi-pickle streams, REDUCE invoked-on-load tracking, unknown-import safelist tier, unparseable/evasive pickles |
 | PyTorch | zip + legacy checkpoints, `.pt2` (torch.export) | All embedded pickles scanned; `torch.package` embedded Python source flagged |
 | ExecuTorch | `.pte` | Flatbuffer identifier validation (extension spoofing) |
-| Keras | `.h5`, `.keras` v3 | `Lambda` / `TFOpLambda` layers (marshaled-bytecode execution); works without h5py via byte heuristic |
+| Keras | `.h5`, `.keras` v3 | `Lambda` / `TFOpLambda` layers (marshaled-bytecode execution) **and non-builtin custom layers** (external code runs on load — config walked for layer classes outside the Keras/TF namespaces); works without h5py via byte heuristic |
+| OpenVINO IR | `.xml` (+ `.bin`) | XXE / DOCTYPE-entity declarations, and graph references to host shared libraries (`.so`/`.dll`) or absolute paths (custom-extension code-load / host-access); XML parsed safely |
 | TensorFlow | SavedModel `.pb` | `PyFunc`/`EagerPyFunc` (code execution), `ReadFile`/`WriteFile` (file access) graph ops |
 | TFLite | `.tflite` | Flex-delegate ops: `FlexPyFunc` (code execution), file-access kernels, full-TF attack surface; magic validation |
 | TF.js | `model.json` | Weight-shard path traversal / remote shard references |
@@ -122,7 +123,7 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | HF config | `config.json`, `*_config.json` | `auto_map` / `custom_pipelines` / `trust_remote_code` keys that arm remote-code execution, linked to the referenced source files |
 | NumPy | `.npy` `.npz` | Object-dtype arrays (embedded pickles) — payload scanned recursively |
 | Archives | `.zip` `.tar` `.gz` | Zip-slip path traversal, zip bombs, recursive member scanning (depth-capped) |
-| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, OpenVINO IR, XGBoost `.ubj`, CatBoost `.cbm`, TensorRT `.engine`/`.plan`/`.trt` | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies |
+| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, XGBoost `.ubj`, CatBoost `.cbm`, TensorRT `.engine`/`.plan`/`.trt` | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies |
 | **Exfiltration engine** | *all files* | Webhook endpoints (Slack/Discord/Telegram), hard-coded IP:port, non-allowlisted URLs, cloud/API credentials (AWS, GitHub, HF, OpenAI, private keys, JWTs), embedded source with network/exec/shell idioms, base64/hex/**base32**/**base85**-encoded payloads (decoded and re-analyzed, incl. one **gzip/zlib** layer), **single-byte XOR-obfuscated** endpoints/commands (recovered by a key-invariant delta-signature search, no brute force), and **UTF-16 (wide) strings** that hide indicators from ASCII scans. Scans in bounded windows with a per-file finding cap; benign-host allowlist is configurable/strict-able (see env table). |
 
 ## How Purser compares
@@ -152,9 +153,9 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 ¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
 enterprise platforms; capabilities vary and are gated behind licensing.
 ² Distinct formats with a dedicated detector. Purser identifies a broad range of
-formats, but for some newer/opaque ones (TensorRT, OpenVINO, MXNet) it does format-ID +
-exfil-scan rather than deep graph parsing — where **ModelAudit** has more per-format
-scanner depth (e.g. TensorRT, OpenVINO). Pick it if that depth matters more than
+formats, but for a few opaque ones (TensorRT, MXNet) it does format-ID + exfil-scan
+rather than deep graph parsing — where **ModelAudit** still has more per-format
+scanner depth (e.g. TensorRT). Pick it if that depth matters more than
 policy/provenance.
 ³ Embedded endpoints, credentials, webhooks, and encoded/compressed payloads across
 *all* file types — Purser's most distinctive engine; peers focus on code, not

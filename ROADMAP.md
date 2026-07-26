@@ -11,7 +11,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(223 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(237 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -30,8 +30,11 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
    regression** (detection floor / FPR ceiling / evasion-recall) all ship in
    `benchmarks/`, with numbers published in `benchmarks/README.md`. Remaining:
    continued growth of the real-model corpus + trend publication.
-2. **Per-format scanner depth (TensorRT, OpenVINO, non-`Lambda` Keras).** Closes
-   the one area where the OSS peer **ModelAudit** leads (per the comparison chart).
+2. **Per-format scanner depth.** **Keras non-`Lambda` custom layers** and
+   **OpenVINO IR** graph parsing now ship (closing the biggest parts of the
+   ModelAudit parity gap). Remaining: `declared`-vs-`reachable` graph parsing for
+   TF SavedModel / Paddle / CoreML (TensorRT deep parse is infeasible without
+   loading the engine — format-ID + exfil is the right level there).
 3. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
@@ -48,8 +51,7 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 | Item | Notes |
 |---|---|
-| Per-format graph parsing (TensorRT, OpenVINO, CoreML, TF, Paddle) | Detection is currently marker/substring based (or format-ID + exfil only for OpenVINO/MXNet/TensorRT `.engine`/`.plan`/`.trt`), so it can't distinguish *declared* vs *reachable* ops. **ModelAudit** has deeper scanners here — the main parity gap from the comparison chart. |
-| Keras custom-layer (non-`Lambda`) | The h5py-less byte fallback only matches `Lambda`/`TFOpLambda`; a custom registered layer with a malicious `__call__` evades it. Needs deeper HDF5/config parsing. |
+| Per-format graph parsing (CoreML, TF, Paddle) | Detection for these is still marker/substring based, so it can't distinguish *declared* vs *reachable* ops. (**Keras** non-`Lambda` custom layers and **OpenVINO IR** now have dedicated depth; TensorRT/MXNet stay format-ID + exfil.) **ModelAudit** has deeper scanners for the remaining formats. |
 | Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
 | More exfil encodings | UTF-16, base64/hex/base32/base85, one gzip/zlib layer, and **single-byte XOR** are covered — decoded blobs are only flagged when they resolve to a real endpoint/command indicator, so no rise in the false-positive rate (verified 0% over the real-model set). Remaining: **multi-byte / rolling-key XOR** (infeasible to key-recover generally). Note: the XOR path deliberately confirms only *structural* indicators (webhook/URL/code/private-key), not narrow-charset credential regexes, which alias with quantized weight bytes. |
 | Packed-binary C2 endpoints | Endpoints stored as packed bytes (no ASCII/UTF-16 form) aren't extracted; needs structured per-format parsing. |
@@ -126,6 +128,9 @@ for per-release detail):
   operator assertion to a verified external root.
 - **Detection:** `trust_remote_code` AST scanner + `auto_map` config scanner;
   exfil UTF-16 / hex / base32 / base85 / gzip / single-byte-XOR decoding; configurable benign-host allowlist.
+- **Per-format depth:** Keras **non-`Lambda` custom-layer** detection (config walked
+  for layer classes outside the Keras/TF namespaces — external code on load) and
+  **OpenVINO IR** graph parsing (XXE / DOCTYPE-entity + external library/path refs).
 - **Supply chain:** hash-pinned lockfiles + `--require-hashes`, split core/HF/deep
   Wolfi images, deterministic CycloneDX SBOM, `trivy` + `osv-scanner` CI gates,
   multi-arch `buildx` with SLSA provenance + SBOM attestations, cosign signing.
