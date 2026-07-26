@@ -11,9 +11,9 @@ pickle, etc.
 Every sample is tagged `resisted` (Purser claims to defeat this technique) or
 not. Evasion **recall over the resisted set must stay 100%** — a miss there is a
 regression and fails the gate. The non-resisted samples are *known* residuals
-from `ROADMAP.md` (XOR-obfuscated exfil, packed-binary C2 endpoints, and a
-protocol-0 ASCII pickle under a structured extension); they are reported
-honestly as "evaded" so the frontier is visible and measured, not hidden.
+from `ROADMAP.md` (packed-binary C2 endpoints and a protocol-0 ASCII pickle
+under a structured extension); they are reported honestly as "evaded" so the
+frontier is visible and measured, not hidden.
 
     python benchmarks/evasion.py                 # report
     python benchmarks/evasion.py --min-recall 100  # gate (CI); exit 1 on regression
@@ -132,6 +132,9 @@ def build(dest: Path) -> list[dict]:
     add("exfil-utf16", dest / "utf16.bin", "webhook as a UTF-16 (wide) string", True)
     (dest / "b85.bin").write_bytes(b"WGHT" + b"\x00" * 8 + base64.b85encode(_WEBHOOK))
     add("exfil-base85", dest / "b85.bin", "webhook encoded as base85", True)
+    (dest / "xor.bin").write_bytes(b"WGHT" + b"\x00" * 8 + _xor(_WEBHOOK))
+    add("exfil-xor", dest / "xor.bin", "webhook obfuscated with a single-byte XOR key", True,
+        "delta-signature search recovers the key, then confirms the decoded indicator")
 
     # ---- resisted: trust_remote_code with an encoded exec in the source ----
     trc = dest / "trc"
@@ -153,9 +156,6 @@ def build(dest: Path) -> list[dict]:
         "AST scanner flags getattr/__import__ indirection")
 
     # ================= known-open residuals (ROADMAP; not gated) =================
-    (dest / "xor.bin").write_bytes(b"WGHT" + b"\x00" * 8 + _xor(_WEBHOOK))
-    add("exfil-xor", dest / "xor.bin", "webhook XOR-obfuscated (key 0x5A)", False,
-        "no XOR/rolling-key deobfuscation yet (ROADMAP)")
     (dest / "packed.bin").write_bytes(
         b"WGHT" + b"\x00" * 8 + struct.pack(">4sH", bytes([203, 0, 113, 7]), 4444))
     add("packed-endpoint", dest / "packed.bin", "C2 IP:port packed as raw bytes (no ASCII/UTF-16)", False,

@@ -87,13 +87,13 @@ Adversarial evasion resistance (`evasion.py`):
 
 | Set | Result |
 |---|---|
-| Evasion recall on techniques Purser claims to resist | **100%** (14/14) — gated |
-| Known-open residuals (ROADMAP) exercised | 3 evaded (XOR, packed-binary endpoint, protocol-0 ASCII pickle under a structured ext) |
+| Evasion recall on techniques Purser claims to resist | **100%** (15/15) — gated |
+| Known-open residuals (ROADMAP) exercised | 2 evaded (packed-binary endpoint, protocol-0 ASCII pickle under a structured ext) |
 
 The resisted set spans spoofed extensions, doc-name disguise, nested archives,
 `.npz`-embedded pickles, `STACK_GLOBAL`/`posix` pickles, base32/hex/zlib/base85/UTF-16
-exfil, and encoded/obfuscated `trust_remote_code` source. The three known-open
-residuals are reported (not gated) so the frontier stays measured, not hidden.
+and single-byte-XOR exfil, and encoded/obfuscated `trust_remote_code` source. The
+two known-open residuals are reported (not gated) so the frontier stays measured.
 
 ## Corpus
 

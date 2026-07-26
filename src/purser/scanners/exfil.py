@@ -247,6 +247,112 @@ def _decoded_b85_verdict(blob: str) -> tuple[Severity, str] | None:
     return None
 
 
+# --- single-byte XOR de-obfuscation -----------------------------------------
+# XOR with a constant key preserves the deltas between adjacent plaintext bytes:
+#   (b_i ^ k) ^ (b_{i+1} ^ k) == b_i ^ b_{i+1}
+# so an anchor's XOR-delta signature is key-independent. We search each window's
+# delta stream for those signatures (C speed), recover the key from a hit, and
+# flag only when the decoded slice actually contains an indicator — the key is
+# never brute-forced and random weight bytes don't false-positive.
+# Only *literal-substring* anchors/indicators — a narrow-charset match (e.g. the
+# AWS-key regex AKIA[0-9A-Z]{16}) coincides with quantized weight bytes under
+# XOR and false-positives, so credential patterns are deliberately excluded here.
+_XOR_ANCHORS = (b"http", b"-----BEGIN ", b"os.system", b"socket.",
+                b"eval(", b"import ", b"/dev/tcp/", b"api.telegram",
+                b"hooks.slack", b"discord.com/api")
+_XOR_SIGS = tuple((a, bytes(a[i] ^ a[i + 1] for i in range(len(a) - 1)))
+                  for a in _XOR_ANCHORS)
+_XOR_SLICE = 512             # max bytes to decode around an anchor hit
+_XOR_MIN_RUN = 16            # required contiguous printable run (kills weight noise)
+_XOR_MAX_CANDIDATES = 4096   # per-anchor candidate cap in one chunk (DoS bound)
+_XOR_CHUNK = 8 * 1024 * 1024  # bound bigint memory: process the window in chunks
+_PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")
+
+
+def _xor_enabled() -> bool:
+    return (env_get("EXFIL_XOR", "1") or "1").lower() not in ("0", "false", "no")
+
+
+def _byte_deltas(data: bytes) -> bytes:
+    """XOR of each byte with its predecessor, at C speed via bigint.
+    result[i] == data[i] ^ data[i-1] for i >= 1 (result[0] == data[0]). XOR is
+    commutative, so an anchor's forward-delta signature still matches this
+    backward-delta stream, one index later — callers recover the anchor start."""
+    xi = int.from_bytes(data, "big")
+    return (xi ^ (xi >> 8)).to_bytes(len(data), "big")
+
+
+def _first_indicator(text: str, allowed: tuple[str, ...]) -> tuple[Severity, str] | None:
+    """Strongest *structural* exfil indicator in a decoded XOR run, or None.
+    Only literal-substring patterns (webhook hosts, code idioms, `://` URLs with
+    a dotted host, private-key headers) — never charset-based credential regexes,
+    which alias with quantized weight bytes and would false-positive."""
+    for label, pat in WEBHOOK_PATTERNS:
+        if pat.search(text):
+            return (Severity.CRITICAL, f"{label} endpoint")
+    for label, pat, sev in CODE_INDICATORS:
+        if pat.search(text):
+            return (sev, label)
+    if _PRIVATE_KEY_RE.search(text):
+        return (Severity.CRITICAL, "private key material")
+    for u in URL_RE.findall(text):
+        host = re.sub(r"^[a-z]+://", "", u).split("/")[0]
+        if "." in host and not _is_benign_url(u, allowed):
+            return (Severity.HIGH, "non-allowlisted URL")
+    return None
+
+
+def _xor_payloads(data: bytes, allowed: tuple[str, ...]):
+    """Yield (severity, why, sample_hex) for single-byte-XOR-obfuscated payloads."""
+    n = len(data)
+    if not _xor_enabled() or n < 16:
+        return
+    over = _XOR_SLICE + 64
+    off = 0
+    while off < n:
+        sub = data[off:off + _XOR_CHUNK + over]
+        m = len(sub)
+        deltas = _byte_deltas(sub)
+        for anchor, sig in _XOR_SIGS:
+            alen = len(anchor)
+            checks = 0
+            start = 1  # the backward-delta stream is valid from index 1
+            while checks < _XOR_MAX_CANDIDATES:
+                q = deltas.find(sig, start, m)
+                if q < 0:
+                    break
+                start = q + 1
+                checks += 1
+                astart = q - 1  # sig starts one index after the anchor start
+                if astart < 0 or astart + alen > m:
+                    continue
+                k = sub[astart] ^ anchor[0]
+                if k == 0:  # not obfuscated — the plaintext scan already covers it
+                    continue
+                if any(sub[astart + j] ^ k != anchor[j] for j in range(alen)):
+                    continue
+                # Extend a contiguous printable run around the anchor under k.
+                # Random weight^k yields only tiny runs; a long run means genuine
+                # embedded text, so this is the main false-positive guard.
+                left = astart
+                floor = max(0, astart - _XOR_SLICE)
+                while left > floor and 0x20 <= (sub[left - 1] ^ k) <= 0x7E:
+                    left -= 1
+                right = astart + alen
+                ceil = min(m, astart + _XOR_SLICE)
+                while right < ceil and 0x20 <= (sub[right] ^ k) <= 0x7E:
+                    right += 1
+                if right - left < _XOR_MIN_RUN:
+                    continue
+                run = bytes(b ^ k for b in sub[left:right]).decode("ascii", "replace")
+                hit = _first_indicator(run, allowed)
+                if hit is None:
+                    continue
+                sev, why = hit
+                yield sev, why, sub[astart:min(m, astart + 24)].hex()
+        off += _XOR_CHUNK
+
+
 class ExfilScanner(Scanner):
     """Scans raw file bytes for exfiltration indicators. Format-agnostic."""
 
@@ -378,5 +484,16 @@ class ExfilScanner(Scanner):
                             "staged data.",
                             ["obfuscation"], m.group()[:48],
                             {"reason": why, "sample": m.group()[:96]})
+
+        # Single-byte XOR-obfuscated indicators (operates on raw bytes, since
+        # obfuscated payloads aren't printable and never reach iter_strings).
+        for sev, why, sample in _xor_payloads(data, allowed):
+            add("EXFIL_XOR_PAYLOAD", sev,
+                f"Single-byte XOR-obfuscated payload in model data ({why})",
+                "A byte run decodes under a single-byte XOR key to text "
+                "containing an exfiltration indicator — a common way to hide "
+                "C2 endpoints or credentials from a plaintext scan.",
+                ["exfiltration", "obfuscation"], sample,
+                {"reason": why, "encoded_sample_hex": sample})
 
         return findings

