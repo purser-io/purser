@@ -73,9 +73,11 @@ def test_keras_v3_file_integration(tmp_path):
 
 
 def test_keras_deeply_nested_config_terminates():
-    # Adversarial nesting must not hang (walk depth/budget bound).
+    # Nesting past the walk's depth bound (100) must terminate, not recurse
+    # unboundedly. Kept modest so json.dumps/loads themselves don't hit the
+    # interpreter recursion limit (that would test the stdlib, not the walk).
     node: dict = {"class_name": "Dense"}
-    for _ in range(500):
+    for _ in range(120):
         node = {"class_name": "Wrapper", "config": {"layer": node}}
     KerasH5Scanner()._scan_config_json(json.dumps(node))  # returns, no hang
 
