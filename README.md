@@ -383,7 +383,7 @@ security dashboard:
   static_configs: [{ targets: ["purser:8080"] }]
 ```
 
-Label cardinality is bounded (verdicts, severities, ~28 formats, ~20 categories,
+Label cardinality is bounded (verdicts, severities, ~36 formats, ~20 categories,
 ISO country codes). `/metrics` is unauthenticated by design (scrapers usually
 are) — **network-restrict it** or disable with `PURSER_METRICS_ENABLED=0`.
 

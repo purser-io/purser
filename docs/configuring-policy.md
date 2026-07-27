@@ -79,7 +79,8 @@ code-in-model attacks.
 `pickle`, `pytorch`, `pytorch_legacy`, `pt2`, `executorch`, `joblib`, `numpy`,
 `keras_h5`, `keras_v3`, `tf_savedmodel`, `tflite`, `tfjs`, `onnx`,
 `safetensors`, `gguf`, `ggml`, `coreml`, `skops`, `flax_msgpack`, `paddle`,
-`mxnet`, `openvino`, `pmml`, `gbm_native`, `tensorrt`, `python_source`, `hf_config`.
+`mxnet`, `openvino`, `pmml`, `gbm_native`, `tensorrt`, `mar`, `mlflow`, `caffe`,
+`nemo`, `darknet`, `lightgbm`, `h2o_mojo`, `torch7`, `python_source`, `hf_config`.
 </details>
 
 ### 3. Country of origin — `origin`
