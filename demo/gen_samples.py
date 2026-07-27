@@ -12,7 +12,7 @@ Stdlib only — no numpy/torch needed. Writes into demo/models/:
     suspicious.pkl            pickle that resolves os.system on load (payload is
                               a harmless `echo`; Purser never executes it) -> FAIL
     exfil-sample.bin          text with a fake Slack webhook + example AWS key
-                              to trip the exfiltration engine -> WARN/FAIL
+                              to trip the exfiltration engine -> FAIL
 
 Nothing here is executed. Pickles are *serialized* (safe); the malicious sample
 only runs its echo if some *other* tool unpickles it — Purser never does.

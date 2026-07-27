@@ -72,11 +72,18 @@ fact rather than a claim, set `require_signed: true` in the policy.
 `0` pass/warn · `1` findings · `2` policy-blocked · `3` error — so any of these
 gate a CI pipeline directly.
 
-## More small models to try (via `hf://`, needs `[hf]`)
+## More small models to try
+
+Via `hf://` (needs `pip install "purser[hf]"`) — Purser downloads and scans the repo:
 - `hf://hf-internal-testing/tiny-random-gpt2` — pickle `.bin` + safetensors + config (KB)
-- `hf://hf-internal-testing/tiny-random-bert`
-- ONNX Model Zoo `mnist-8.onnx` (~26 KB) — `.onnx`
-- `hf://ggml-org/models` → `tinyllamas/stories260K.gguf` (~1 MB) — `.gguf`
+- `hf://hf-internal-testing/tiny-random-bert` — also ships an ONNX export
+- `hf://Qwen/Qwen2.5-0.5B-Instruct` — a real CN-published model (safetensors); content **PASS** but **BLOCKED** by `block-china.yaml` on origin
+
+Or point `purser scan` at any local file you already have — `.onnx`, `.gguf`,
+`.safetensors`, `.h5`, `.pkl`, … are all recognized:
+```bash
+purser scan path/to/model.onnx
+```
 
 ## Cleanup
 ```bash
