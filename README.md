@@ -592,11 +592,14 @@ pytest
 ## Roadmap and security posture
 
 - [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one shipped.
-- [`ROADMAP.md`](ROADMAP.md) — what's next and why (external PKI trust root,
-  deeper per-format detection, an adversarial evasion benchmark, Wolfi base
-  auto-refresh).
+- [`ROADMAP.md`](ROADMAP.md) — what's next and why (foundation readiness: CNCF
+  Landscape entry + OpenSSF badge; Wolfi base auto-refresh). The external-PKI/
+  Sigstore trust root, per-format scanner depth, and the adversarial evasion
+  benchmark have shipped.
 - [`SECURITY.md`](SECURITY.md) — disclosure policy + SME security evaluation of
   the code and container images (threat model, hardening, residual risk).
+- [`docs/openssf-best-practices.md`](docs/openssf-best-practices.md) — OpenSSF
+  Best Practices **passing**-criteria self-assessment (each mapped to evidence).
 
 ## Contributing
 

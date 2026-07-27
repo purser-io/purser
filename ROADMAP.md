@@ -21,9 +21,15 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 ## Recommended next (priority order)
 
-1. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
-   of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
-   is a CNCF Landscape entry and an OpenSSF Best Practices badge.
+1. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
+   Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`).
+   - **OpenSSF Best Practices badge** — a full **passing**-criteria self-assessment
+     is prepared ([`docs/openssf-best-practices.md`](docs/openssf-best-practices.md));
+     every MUST is met (two justified N/A). Remaining: the owner self-certifies at
+     bestpractices.dev and drops the badge into the README (no code gap).
+   - **CNCF Landscape entry** — prepared ([`docs/cncf-landscape-entry.md`](docs/cncf-landscape-entry.md))
+     but **deferred**: the landscape's inclusion bar (traction ≈ ≥300 stars, plus a
+     backing org/Crunchbase) isn't met yet. Submit once adoption grows.
 
 *(Real-world validation + published benchmark — formerly #1 — is now complete:
 the Phase-1 known-answer harness, Phase-2 peer comparison (`compare.py`), Phase-3
