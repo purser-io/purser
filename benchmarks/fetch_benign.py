@@ -20,8 +20,14 @@ except ImportError:  # pragma: no cover
     raise SystemExit("huggingface_hub is required — install with: pip install 'purser[hf]'")
 
 HERE = Path(__file__).parent
-PATTERNS = ["*.safetensors", "*.bin", "*.gguf", "*.onnx", "*.h5", "*.pb",
-            "*.pkl", "*.pt", "*.pth", "config.json"]
+# One representative artifact per format. For ONNX, transformers.js repos ship
+# many redundant quantization variants (fp16/int8/uint8/q4/bnb4/…) that would
+# bloat the corpus to tens of GB with no extra FP signal — so fetch only the
+# primary + `_quantized` (the int8 case that stresses secret/exfil regexes) and
+# merged decoders, not every variant.
+PATTERNS = ["*.safetensors", "*.bin", "*.gguf", "*.h5", "*.pb",
+            "*.pkl", "*.pt", "*.pth", "config.json",
+            "*model.onnx", "*quantized.onnx", "*merged.onnx"]
 
 
 def main() -> None:

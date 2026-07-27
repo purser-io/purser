@@ -21,18 +21,19 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 ## Recommended next (priority order)
 
-1. **Real-world validation + published benchmark.** A Phase-1 harness (known-answer
-   detection + false-positive rate + latency), a Phase-2 head-to-head comparison
-   vs picklescan / Fickling / ModelScan / ModelAudit (`benchmarks/compare.py`), a
-   Phase-3 adversarial **evasion suite** (`benchmarks/evasion.py` — gated on
-   evasion recall over the techniques Purser claims to resist; known-open
-   residuals reported, not gated), and a **scheduled CI job that gates on
-   regression** (detection floor / FPR ceiling / evasion-recall) all ship in
-   `benchmarks/`, with numbers published in `benchmarks/README.md`. Remaining:
-   continued growth of the real-model corpus + trend publication.
-2. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
+1. **Foundation readiness.** Community scaffolding now ships (CONTRIBUTING, Code
    of Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`) — next
    is a CNCF Landscape entry and an OpenSSF Best Practices badge.
+
+*(Real-world validation + published benchmark — formerly #1 — is now complete:
+the Phase-1 known-answer harness, Phase-2 peer comparison (`compare.py`), Phase-3
+adversarial evasion suite (`evasion.py`), and a scheduled CI job that gates on
+detection / FPR / evasion regression all ship in `benchmarks/`. The real-model
+negative set is now **75 pinned HuggingFace models** — a broad architecture sweep
+(encoders, causal/seq2seq LMs, vision, audio, multimodal; pickle / safetensors /
+ONNX / Keras incl. int8-quantized) at **0% FPR** — published in
+`benchmarks/README.md` and re-measured weekly. Further corpus growth + long-term
+trend tracking is ongoing maintenance.)*
 
 *(Per-format scanner depth — formerly #2 — is now complete for what a static,
 no-load scanner can do: dedicated op / custom-code detection for pickle, Keras
@@ -118,10 +119,10 @@ for per-release detail):
   CI job on the policy verdict, **and** a Kubernetes `ValidatingAdmissionWebhook`
   (`purser.admission`, Helm `admission.enabled`) enforces image-digest pinning +
   approved-model digests at admission — closing the scan→deploy TOCTOU gap.
-- **Validation benchmark:** a known-answer + real-model harness, a peer-scanner
-  head-to-head comparison, a Phase-3 adversarial evasion suite (gated on evasion
-  recall), and a scheduled CI job that gates on detection/FPR/evasion regression
-  (`benchmarks/`).
+- **Validation benchmark:** a known-answer + real-model harness (**75 pinned
+  HuggingFace models**, 0% FPR), a peer-scanner head-to-head comparison, a Phase-3
+  adversarial evasion suite (gated on evasion recall), and a scheduled CI job that
+  gates on detection/FPR/evasion regression (`benchmarks/`).
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
 - **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.

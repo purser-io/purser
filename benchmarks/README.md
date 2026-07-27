@@ -54,15 +54,18 @@ Outputs `benchmarks/results/{report,comparison}.md` and `results.json` (all giti
 
 ## Latest measured
 
-Snapshot from a local run on **2026-07-25** (default policy, 12 known-answer
-malicious + 18 benign incl. 14 real HuggingFace models). Reproduce with the
+Snapshot from a local run on **2026-07-27** (default policy, 12 known-answer
+malicious + 79 benign incl. **75 real HuggingFace models** — a broad architecture
+sweep: encoders, causal/seq2seq LMs, vision, audio, multimodal; pickle /
+safetensors / ONNX / Keras, incl. int8-quantized ONNX). Reproduce with the
 commands above; the scheduled CI job re-measures weekly.
 
 | Metric | Value |
 |---|---|
 | Detection (TPR) on known-answer set | **100%** (12/12) |
-| False-positive rate (benign hard-failed) | **0%** (0/18) |
-| Scan latency p50 | ~1 ms (large real models dominate the tail) |
+| False-positive rate (benign hard-failed) | **0%** (0/79) |
+| Benign flagged WARN (advisory) | 0/79 |
+| Scan latency p50 / p95 | 267 ms / 22 s (large real models dominate the tail) |
 
 Head-to-head over the known-answer corpus (`compare.py`, peer versions
 picklescan 1.0.5 · ModelScan 0.8.8 · Fickling 0.1.12 · ModelAudit):

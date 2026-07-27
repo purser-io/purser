@@ -1,51 +1,107 @@
 # Real, reputable HuggingFace models used as the negative (benign) set for the
 # false-positive rate. These SHOULD scan clean (PASS/WARN); a FAIL/BLOCKED on any
-# is a false positive to root-cause. All repos below were verified to exist and
-# to ship the noted formats. `fetch_benign.py` resolves each `revision` to a
-# commit SHA and pins it in benign_models.lock.json for reproducibility.
+# is a false positive to root-cause. `fetch_benign.py` resolves each `revision`
+# to a commit SHA, pins it in benign_models.lock.json, and SKIPS any repo that is
+# gated/removed — so this is a curated *candidate* list; the lock is the set that
+# actually resolved. Kept heavily tiny (KB–low-MB) for fast, reproducible fetches,
+# with a few real production models for realism.
 #
-# Coverage here: pickle (.bin), safetensors, ONNX, Keras (.h5). Real GGUF / TF
-# SavedModel / CoreML benign samples are large or scarce; the synthetic clean
-# artifacts in kat.py cover those formats for now — expand as tiny examples surface.
-#
-# Kept mostly tiny (KB–low-MB) for fast fetches; a couple of real production
-# models are included for realism. EXPAND this list (hundreds of models) for a
-# statistically strong FPR estimate.
+# Coverage: pickle (.bin), safetensors, ONNX, Keras (.h5) across a broad sweep of
+# architectures (encoders, decoders, seq2seq, vision, audio, multimodal). Real
+# GGUF / TF SavedModel / CoreML negatives are scarce/large; the synthetic clean
+# artifacts in kat.py cover those formats.
 models:
-  # --- tiny test fixtures (KB): multi-format, fast ---
-  - { repo: hf-internal-testing/tiny-random-gpt2,                        revision: main, format: bin+h5+safetensors }
-  - { repo: hf-internal-testing/tiny-random-bert,                        revision: main, format: bin+h5+onnx+safetensors }
-  - { repo: hf-internal-testing/tiny-random-distilbert,                  revision: main, format: bin+h5 }
-  - { repo: hf-internal-testing/tiny-random-t5,                          revision: main, format: bin+h5 }
-  - { repo: hf-internal-testing/tiny-random-RobertaModel,                revision: main, format: bin+h5+onnx+safetensors }
+  # ---- tiny multi-format fixtures (KB) --------------------------------------
+  - { repo: hf-internal-testing/tiny-random-gpt2,                          revision: main, format: bin+h5+safetensors }
+  - { repo: hf-internal-testing/tiny-random-bert,                          revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: hf-internal-testing/tiny-random-distilbert,                    revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-t5,                            revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-albert,                               revision: main, format: bin+h5 }
+
+  # ---- hf-internal-testing tiny-random: architecture sweep ------------------
+  # encoders
+  - { repo: hf-internal-testing/tiny-random-BertModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-RobertaModel,                  revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: hf-internal-testing/tiny-random-DistilBertModel,               revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-AlbertModel,                   revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-ElectraModel,                  revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-DebertaModel,                  revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-DebertaV2Model,                revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-MobileBertModel,               revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-XLMRobertaModel,               revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-CamembertModel,                revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-FunnelModel,                   revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-LongformerModel,               revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-BigBirdModel,                  revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-XLNetModel,                    revision: main, format: bin }
   - { repo: hf-internal-testing/tiny-random-BertForSequenceClassification, revision: main, format: bin+h5+onnx }
-  # --- small real models (low-MB): pickle + safetensors ---
-  - { repo: prajjwal1/bert-tiny,                                         revision: main, format: bin }
-  - { repo: prajjwal1/bert-mini,                                         revision: main, format: bin }
-  - { repo: google/bert_uncased_L-2_H-128_A-2,                           revision: main, format: bin+safetensors }
-  - { repo: sshleifer/tiny-gpt2,                                         revision: main, format: bin+h5 }
-  - { repo: sshleifer/tiny-distilbert-base-cased,                        revision: main, format: bin+h5 }
-  # --- more tiny-random fixtures: broaden architecture/format coverage ---
-  - { repo: hf-internal-testing/tiny-random-gpt_neo,                     revision: main, format: bin+safetensors }
-  - { repo: hf-internal-testing/tiny-random-LlamaForCausalLM,            revision: main, format: bin+safetensors }
-  - { repo: hf-internal-testing/tiny-random-BartModel,                   revision: main, format: bin+h5 }
-  - { repo: hf-internal-testing/tiny-random-ViTModel,                    revision: main, format: bin+safetensors }
-  - { repo: hf-internal-testing/tiny-random-CLIPModel,                   revision: main, format: bin+safetensors }
-  - { repo: hf-internal-testing/tiny-random-Wav2Vec2Model,              revision: main, format: bin }
-  - { repo: hf-internal-testing/tiny-random-DebertaV2Model,              revision: main, format: bin+safetensors }
-  - { repo: hf-internal-testing/tiny-random-ElectraModel,                revision: main, format: bin+h5 }
-  - { repo: hf-internal-testing/tiny-random-MobileBertModel,             revision: main, format: bin }
-  - { repo: hf-internal-testing/tiny-albert,                             revision: main, format: bin+h5 }
-  # --- ONNX (transformers.js exports) ---
-  - { repo: Xenova/gpt2,                                                 revision: main, format: onnx }
-  - { repo: Xenova/all-MiniLM-L6-v2,                                     revision: main, format: onnx }
-  - { repo: Xenova/distilgpt2,                                           revision: main, format: onnx }
-  - { repo: Xenova/bert-base-uncased,                                    revision: main, format: onnx }
-  # --- small real models (low-MB): more pickle + safetensors ---
-  - { repo: prajjwal1/bert-small,                                        revision: main, format: bin }
-  - { repo: prajjwal1/bert-medium,                                       revision: main, format: bin }
-  - { repo: google/bert_uncased_L-4_H-256_A-4,                           revision: main, format: bin+safetensors }
-  - { repo: distilbert-base-uncased,                                     revision: main, format: bin+safetensors }
-  # --- one real production model (~90 MB) for realism ---
-  - { repo: sentence-transformers/all-MiniLM-L6-v2,                      revision: main, format: bin+h5+onnx+safetensors }
-  - { repo: sentence-transformers/paraphrase-MiniLM-L3-v2,               revision: main, format: bin+safetensors }
+  # decoders / causal LMs
+  - { repo: hf-internal-testing/tiny-random-gpt_neo,                       revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-GPTJForCausalLM,               revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-OPTForCausalLM,                revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-BloomForCausalLM,              revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-LlamaForCausalLM,              revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-MistralForCausalLM,            revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-GPTNeoXForCausalLM,            revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-CodeGenForCausalLM,            revision: main, format: bin+safetensors }
+  # seq2seq
+  - { repo: hf-internal-testing/tiny-random-BartModel,                     revision: main, format: bin+h5 }
+  - { repo: hf-internal-testing/tiny-random-MBartModel,                    revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-PegasusModel,                  revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-MarianModel,                   revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-MT5Model,                      revision: main, format: bin+safetensors }
+  # vision
+  - { repo: hf-internal-testing/tiny-random-ViTModel,                      revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-DeiTModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-BeitModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-ConvNextModel,                 revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-SwinModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-SegformerModel,                revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-MobileViTModel,                revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-DetrModel,                     revision: main, format: bin+safetensors }
+  # audio / multimodal
+  - { repo: hf-internal-testing/tiny-random-Wav2Vec2Model,                 revision: main, format: bin }
+  - { repo: hf-internal-testing/tiny-random-HubertModel,                   revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-WhisperForConditionalGeneration, revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-CLIPModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-BlipModel,                     revision: main, format: bin+safetensors }
+  - { repo: hf-internal-testing/tiny-random-LayoutLMModel,                 revision: main, format: bin }
+
+  # ---- google BERT miniatures (small, verified) -----------------------------
+  - { repo: google/bert_uncased_L-2_H-128_A-2,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-2_H-256_A-4,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-2_H-512_A-8,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-4_H-128_A-2,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-4_H-256_A-4,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-4_H-512_A-8,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-6_H-128_A-2,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-6_H-256_A-4,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-8_H-128_A-2,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-8_H-256_A-4,                             revision: main, format: bin }
+  - { repo: google/bert_uncased_L-10_H-128_A-2,                            revision: main, format: bin }
+  - { repo: google/bert_uncased_L-12_H-128_A-2,                            revision: main, format: bin }
+
+  # ---- prajjwal1 / sshleifer small reals ------------------------------------
+  - { repo: prajjwal1/bert-tiny,                                           revision: main, format: bin }
+  - { repo: prajjwal1/bert-mini,                                           revision: main, format: bin }
+  - { repo: prajjwal1/bert-small,                                          revision: main, format: bin }
+  - { repo: prajjwal1/bert-medium,                                         revision: main, format: bin }
+  - { repo: sshleifer/tiny-gpt2,                                           revision: main, format: bin+h5 }
+  - { repo: sshleifer/tiny-distilbert-base-cased,                          revision: main, format: bin+h5 }
+  - { repo: sshleifer/tiny-distilroberta-base,                             revision: main, format: bin }
+  - { repo: sshleifer/tiny-mbart,                                          revision: main, format: bin }
+
+  # ---- ONNX (transformers.js exports) ---------------------------------------
+  - { repo: Xenova/gpt2,                                                   revision: main, format: onnx }
+  - { repo: Xenova/distilgpt2,                                             revision: main, format: onnx }
+  - { repo: Xenova/all-MiniLM-L6-v2,                                       revision: main, format: onnx }
+  - { repo: Xenova/bert-base-uncased,                                      revision: main, format: onnx }
+  - { repo: Xenova/distilbert-base-uncased,                                revision: main, format: onnx }
+  - { repo: Xenova/t5-small,                                               revision: main, format: onnx }
+  - { repo: Xenova/all-MiniLM-L12-v2,                                      revision: main, format: onnx }
+  - { repo: Xenova/paraphrase-MiniLM-L6-v2,                                revision: main, format: onnx }
+
+  # ---- real production models (low–mid MB) for realism ----------------------
+  - { repo: sentence-transformers/all-MiniLM-L6-v2,                        revision: main, format: bin+h5+onnx+safetensors }
+  - { repo: sentence-transformers/paraphrase-MiniLM-L3-v2,                 revision: main, format: bin+safetensors }
+  - { repo: sentence-transformers/all-MiniLM-L12-v2,                       revision: main, format: bin+safetensors }
