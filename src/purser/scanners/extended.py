@@ -3,9 +3,9 @@ TF.js, and PMML.
 
 Same design rules as the core scanners: static byte/structure analysis only,
 nothing is deserialized with the target framework. Formats with no dedicated
-scanner (Flax msgpack, MXNet params, OpenVINO IR, native GBM formats, legacy
-GGML) still get format identification for policy allowlists plus the
-format-agnostic exfiltration scan.
+scanner (Flax msgpack, MXNet params, native GBM formats, TensorRT, Darknet,
+LightGBM, Torch7, legacy GGML) still get format identification for policy
+allowlists plus the format-agnostic exfiltration scan.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import json
 import re
 import zipfile
 from pathlib import Path, PurePosixPath
+
+import yaml
 
 from purser.core.findings import Finding, Severity
 from purser.scanners.base import Scanner
@@ -283,3 +285,85 @@ class PMMLScanner(Scanner):
                 ))
                 break
         return findings
+
+
+class MARScanner(Scanner):
+    """TorchServe model archives (.mar): a zip bundling a handler `.py` that
+    TorchServe imports and runs to serve the model. The embedded model/pickle
+    members are covered by the ArchiveScanner the dispatcher pairs with this."""
+
+    name = "mar"
+
+    def scan(self, path: Path) -> list[Finding]:
+        findings: list[Finding] = []
+        try:
+            with zipfile.ZipFile(path) as zf:
+                for member in zf.namelist():
+                    if member.endswith(".py"):
+                        findings.append(self.finding(
+                            "MAR_HANDLER_CODE", Severity.HIGH,
+                            f"TorchServe archive bundles a Python handler `{member}`",
+                            "TorchServe imports and executes the handler module to "
+                            "serve the model; review it before trusting the archive.",
+                            tags=["code-execution"], evidence={"member": member},
+                        ))
+        except zipfile.BadZipFile:
+            findings.append(self.finding(
+                "MAR_MALFORMED", Severity.MEDIUM,
+                ".mar is not a valid zip archive", tags=["evasion"]))
+        return findings
+
+
+class MLflowScanner(Scanner):
+    """MLflow model descriptor (MLmodel): the `python_function` flavor names a
+    `loader_module` (and optional bundled `code/`) that MLflow imports to load
+    the model — arbitrary code on load."""
+
+    name = "mlflow"
+
+    def scan(self, path: Path) -> list[Finding]:
+        try:
+            doc = yaml.safe_load(path.read_text(errors="replace")) or {}
+        except (yaml.YAMLError, OSError):
+            return []
+        if not isinstance(doc, dict):
+            return []
+        flavors = doc.get("flavors") or {}
+        pf = flavors.get("python_function") if isinstance(flavors, dict) else None
+        if not isinstance(pf, dict):
+            return []
+        loader = str(pf.get("loader_module") or "")
+        code = pf.get("code")
+        return [self.finding(
+            "MLFLOW_PYFUNC_LOADER", Severity.MEDIUM,
+            f"MLflow pyfunc model loads code via `{loader or 'loader_module'}`"
+            + (" (+ bundled code/)" if code else ""),
+            "MLflow imports the loader module (and any bundled `code/`) to load "
+            "the model, executing it on load; verify the referenced code.",
+            tags=["code-execution", "provenance"],
+            evidence={"loader_module": loader, "code": str(code or "")},
+        )]
+
+
+class CaffeScanner(Scanner):
+    """Caffe networks (.prototxt text / .caffemodel protobuf): a `type: "Python"`
+    (PythonLayer) runs a developer-supplied module/class at inference. Weights
+    (.caffemodel) carry no code and are covered by the exfil scan."""
+
+    name = "caffe"
+    _PY_LAYER = re.compile(r'type:\s*"?Python"?|PythonLayer|python_param')
+
+    def scan(self, path: Path) -> list[Finding]:
+        try:
+            text = path.read_bytes()[: 4 * 1024 * 1024].decode("latin1", "replace")
+        except OSError:
+            return []
+        if self._PY_LAYER.search(text):
+            return [self.finding(
+                "CAFFE_PYTHON_LAYER", Severity.HIGH,
+                "Caffe network declares a Python layer",
+                "A Caffe Python layer runs a developer-supplied module/class at "
+                "inference; verify the accompanying code before trusting the model.",
+                tags=["code-execution"],
+            )]
+        return []

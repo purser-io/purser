@@ -1,5 +1,7 @@
+import io
 import json
 import pickle
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -13,6 +15,82 @@ from tests.conftest import EvilOsSystem
 def make(path: Path, data: bytes) -> Path:
     path.write_bytes(data)
     return path
+
+
+# -- Breadth batch: code-exec formats (MAR / MLflow / Caffe) -----------------
+
+def test_mar_handler_code(tmp_path: Path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("MAR-INF/MANIFEST.json", "{}")
+        z.writestr("handler.py", "import os\nos.system('x')")
+    p = make(tmp_path / "model.mar", buf.getvalue())
+    assert detect_format(p) == ModelFormat.MAR
+    _, findings = scan_file(p)
+    assert any(f.rule_id == "MAR_HANDLER_CODE" and f.severity == Severity.HIGH
+               for f in findings)
+
+
+def test_mlflow_pyfunc_loader(tmp_path: Path):
+    p = make(tmp_path / "MLmodel",
+             b"flavors:\n  python_function:\n    loader_module: shady.loader\n    code: code/\n")
+    assert detect_format(p) == ModelFormat.MLFLOW
+    _, findings = scan_file(p)
+    assert any(f.rule_id == "MLFLOW_PYFUNC_LOADER" for f in findings)
+
+
+def test_mlflow_non_pyfunc_clean(tmp_path: Path):
+    p = make(tmp_path / "MLmodel", b"flavors:\n  sklearn:\n    pickled_model: model.pkl\n")
+    _, findings = scan_file(p)
+    assert not [f for f in findings if f.rule_id.startswith("MLFLOW_")]
+
+
+def test_caffe_python_layer(tmp_path: Path):
+    p = make(tmp_path / "net.prototxt",
+             b'layer { name: "py" type: "Python" python_param { module: "evil" } }')
+    assert detect_format(p) == ModelFormat.CAFFE
+    _, findings = scan_file(p)
+    assert any(f.rule_id == "CAFFE_PYTHON_LAYER" and f.severity == Severity.HIGH
+               for f in findings)
+
+
+def test_caffe_plain_prototxt_clean(tmp_path: Path):
+    p = make(tmp_path / "net.prototxt",
+             b'layer { name: "conv1" type: "Convolution" }')
+    _, findings = scan_file(p)
+    assert not [f for f in findings if f.rule_id.startswith("CAFFE_")]
+
+
+# -- Breadth batch: data-only identification ---------------------------------
+
+def test_darknet_identified(tmp_path: Path):
+    assert detect_format(make(tmp_path / "y.weights", b"\x00\x00\x00\x02" + b"\x00" * 32)) \
+        == ModelFormat.DARKNET
+
+
+def test_lightgbm_identified(tmp_path: Path):
+    assert detect_format(make(tmp_path / "m.lgb", b"tree\nversion=v3\n")) == ModelFormat.LIGHTGBM
+    # LightGBM text model recognized by magic even under a .txt name
+    assert detect_format(make(tmp_path / "model.txt", b"tree\nversion=v3\nnum_class=1\n")) \
+        == ModelFormat.LIGHTGBM
+
+
+def test_torch7_identified(tmp_path: Path):
+    assert detect_format(make(tmp_path / "m.t7", b"\x00\x01\x02\x03")) == ModelFormat.TORCH7
+
+
+def test_nemo_identified(tmp_path: Path):
+    p = tmp_path / "m.nemo"
+    with tarfile.open(p, "w"):
+        pass
+    assert detect_format(p) == ModelFormat.NEMO
+
+
+def test_h2o_mojo_identified(tmp_path: Path):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("model.ini", "[info]\n")
+    assert detect_format(make(tmp_path / "mojo.zip", buf.getvalue())) == ModelFormat.H2O_MOJO
 
 
 # -- TFLite ------------------------------------------------------------------

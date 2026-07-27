@@ -35,6 +35,14 @@ class ModelFormat(str, enum.Enum):
     PMML = "pmml"
     GBM_NATIVE = "gbm_native"      # XGBoost .ubj, CatBoost .cbm, ...
     TENSORRT = "tensorrt"          # serialized TensorRT engine (.engine/.plan/.trt)
+    MAR = "mar"                    # TorchServe model archive (bundles a handler .py)
+    MLFLOW = "mlflow"              # MLflow model directory (MLmodel; pyfunc loader)
+    CAFFE = "caffe"                # Caffe .caffemodel / .prototxt (PythonLayer)
+    NEMO = "nemo"                  # NVIDIA NeMo .nemo (tar bundle)
+    DARKNET = "darknet"            # Darknet .weights
+    LIGHTGBM = "lightgbm"          # LightGBM native text model
+    H2O_MOJO = "h2o_mojo"          # H2O MOJO zip
+    TORCH7 = "torch7"              # legacy Torch7 .t7 serialization
     PYTHON_SOURCE = "python_source"  # bundled .py (trust_remote_code)
     HF_CONFIG = "hf_config"        # config.json etc. (auto_map)
     ARCHIVE = "archive"
@@ -55,6 +63,7 @@ MODEL_EXTS = PICKLE_EXTS | {
     ".npy", ".npz", ".pb", ".tflite", ".pte", ".pt2", ".mlmodel", ".skops",
     ".pdmodel", ".params", ".msgpack", ".flax", ".ubj", ".cbm", ".pmml",
     ".engine", ".plan", ".trt",
+    ".mar", ".caffemodel", ".prototxt", ".nemo", ".weights", ".lgb", ".t7",
     ".zip", ".tar", ".gz", ".tgz",
 }
 
@@ -112,11 +121,15 @@ def _classify_zip(path: Path) -> ModelFormat:
     suffix = path.suffix.lower()
     if suffix == ".pt2":
         return ModelFormat.PT2
+    if suffix == ".mar":                    # TorchServe archive (handler .py)
+        return ModelFormat.MAR
     try:
         with zipfile.ZipFile(path) as zf:
             names = zf.namelist()
     except zipfile.BadZipFile:
         return ModelFormat.UNKNOWN
+    if any(n == "model.ini" or n.endswith("/model.ini") for n in names):
+        return ModelFormat.H2O_MOJO         # H2O MOJO bundle
     if suffix == ".skops" or "schema.json" in names:
         return ModelFormat.SKOPS
     if any(n.endswith("data.pkl") for n in names):
@@ -161,6 +174,10 @@ def detect_format(path: Path) -> ModelFormat:
 
     suffix = path.suffix.lower()
 
+    if path.name == "MLmodel":                       # MLflow model descriptor
+        return ModelFormat.MLFLOW
+    if head.startswith(b"tree\nversion=") or suffix == ".lgb":  # LightGBM text model
+        return ModelFormat.LIGHTGBM
     if head.startswith(HDF5_MAGIC):
         return ModelFormat.KERAS_H5
     if head.startswith(GGUF_MAGIC):
@@ -209,6 +226,14 @@ def detect_format(path: Path) -> ModelFormat:
         return ModelFormat.ONNX
     if suffix == ".pb" or path.name == "saved_model.pb":
         return ModelFormat.TF_SAVEDMODEL
+    if suffix in (".caffemodel", ".prototxt"):    # Caffe (PythonLayer risk)
+        return ModelFormat.CAFFE
+    if suffix == ".weights":                      # Darknet
+        return ModelFormat.DARKNET
+    if suffix == ".t7":                           # legacy Torch7
+        return ModelFormat.TORCH7
+    if suffix == ".nemo":                         # NVIDIA NeMo (tar bundle)
+        return ModelFormat.NEMO
     if suffix in (".tar", ".gz", ".tgz"):
         return ModelFormat.ARCHIVE
     if _looks_like_safetensors(head) and suffix in ("", ".bin"):

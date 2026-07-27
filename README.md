@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.1.3-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-240%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -118,12 +118,15 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | CoreML | `.mlmodel` `.mlpackage` | `CustomModel` backend and custom-layer markers (developer-supplied native code) |
 | skops | `.skops` | Schema types run through the pickle dangerous/safe classifier; pickle-fallback loader nodes |
 | PaddlePaddle | `.pdmodel` `.pdparams` | `py_func`/`py_layer` ops (code execution); param files scanned as pickles |
+| TorchServe | `.mar` | Bundled `handler.py` that TorchServe imports/executes on serve; embedded model recursed |
+| MLflow | `MLmodel` dir | `python_function` flavor `loader_module`/bundled `code/` (arbitrary code on load) |
+| Caffe | `.prototxt` `.caffemodel` | `type: "Python"` (PythonLayer) runs arbitrary Python at inference |
 | PMML | `.pmml` | XXE entity declarations, Extension elements with script content |
 | Bundled Python | `*.py` (`modeling_*.py`, …) | **AST analysis of `trust_remote_code` source** — exec/eval, os/subprocess, sockets & HTTP clients, dynamic import, native code, marshal/pickle, base64/hex deobfuscation, `os.environ` harvesting; module-scope calls escalated (run on import) |
 | HF config | `config.json`, `*_config.json` | `auto_map` / `custom_pipelines` / `trust_remote_code` keys that arm remote-code execution, linked to the referenced source files |
 | NumPy | `.npy` `.npz` | Object-dtype arrays (embedded pickles) — payload scanned recursively |
 | Archives | `.zip` `.tar` `.gz` | Zip-slip path traversal, zip bombs, recursive member scanning (depth-capped) |
-| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, XGBoost `.ubj`, CatBoost `.cbm`, TensorRT `.engine`/`.plan`/`.trt` | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies |
+| Identified for policy + exfil scan | legacy GGML, Flax/msgpack, MXNet `.params`, XGBoost `.ubj`, CatBoost `.cbm`, TensorRT `.engine`/`.plan`/`.trt`, Darknet `.weights`, LightGBM native, Torch7 `.t7`, NeMo `.nemo`, H2O MOJO | Data-only/opaque formats: named for format allowlists; full exfiltration scan applies (NeMo/MOJO archives recursed) |
 | **Exfiltration engine** | *all files* | Webhook endpoints (Slack/Discord/Telegram), hard-coded IP:port, non-allowlisted URLs, cloud/API credentials (AWS, GitHub, HF, OpenAI, private keys, JWTs), embedded source with network/exec/shell idioms, base64/hex/**base32**/**base85**-encoded payloads (decoded and re-analyzed, incl. one **gzip/zlib** layer), **single-byte XOR-obfuscated** endpoints/commands (recovered by a key-invariant delta-signature search, no brute force), and **UTF-16 (wide) strings** that hide indicators from ASCII scans. Scans in bounded windows with a per-file finding cap; benign-host allowlist is configurable/strict-able (see env table). |
 
 ## How Purser compares
@@ -136,7 +139,7 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | License | Apache-2.0 | OSS | OSS | OSS | OSS | Commercial |
 | Pickle opcode malware scan | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Format breadth² | ✅ 18+ | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 30+ | ✅ |
+| Format breadth² | ✅ 35+ | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 30+ | ✅ |
 | Safetensors / GGUF / ONNX / TFLite | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Data-exfil & secret detection³ | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
 | `trust_remote_code` Python (AST) + `auto_map` | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
@@ -152,11 +155,13 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 
 ¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
 enterprise platforms; capabilities vary and are gated behind licensing.
-² Distinct formats with a dedicated detector. Purser identifies a broad range of
-formats, but for a few opaque ones (TensorRT, MXNet) it does format-ID + exfil-scan
-rather than deep graph parsing — where **ModelAudit** still has more per-format
-scanner depth (e.g. TensorRT). Pick it if that depth matters more than
-policy/provenance.
+² ~35 distinct formats identified and policy-gated — a dedicated scanner where the
+format carries code/graph (pickle, Keras, ONNX, TF, GGUF, CoreML, OpenVINO, Caffe,
+TorchServe `.mar`, MLflow, …), and format-ID + exfil for data-only blobs (GGML,
+MXNet, GBM, TensorRT, Darknet, LightGBM, Torch7, …). For a few opaque ones
+(TensorRT, MXNet) it stays format-ID + exfil rather than deep graph parsing —
+where **ModelAudit** still has more per-format scanner depth (e.g. TensorRT).
+Pick it if that depth matters more than policy/provenance.
 ³ Embedded endpoints, credentials, webhooks, and encoded/compressed payloads across
 *all* file types — Purser's most distinctive engine; peers focus on code, not
 exfiltration strings.

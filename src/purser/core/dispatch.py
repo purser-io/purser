@@ -10,8 +10,11 @@ from purser.core.formats import ModelFormat, detect_format
 from purser.scanners.base import Scanner
 from purser.scanners.exfil import ExfilScanner
 from purser.scanners.extended import (
+    CaffeScanner,
     CoreMLScanner,
     ExecuTorchScanner,
+    MARScanner,
+    MLflowScanner,
     PaddleScanner,
     PMMLScanner,
     SkopsScanner,
@@ -56,6 +59,12 @@ def scanners_for(fmt: ModelFormat, depth: int = 0) -> list[Scanner]:
         ModelFormat.EXECUTORCH: [ExecuTorchScanner()],
         ModelFormat.PADDLE: [PaddleScanner()],
         ModelFormat.PMML: [PMMLScanner()],
+        # Formats bundling executable code (roadmap #2 breadth):
+        ModelFormat.MAR: [MARScanner(), ArchiveScanner(depth=depth)],
+        ModelFormat.MLFLOW: [MLflowScanner()],
+        ModelFormat.CAFFE: [CaffeScanner()],
+        ModelFormat.NEMO: [ArchiveScanner(depth=depth)],
+        ModelFormat.H2O_MOJO: [ArchiveScanner(depth=depth)],
         ModelFormat.PYTHON_SOURCE: [PythonSourceScanner()],
         ModelFormat.HF_CONFIG: [HFConfigScanner()],
         # Data-only or opaque formats: identified for policy allowlists;
@@ -66,6 +75,9 @@ def scanners_for(fmt: ModelFormat, depth: int = 0) -> list[Scanner]:
         ModelFormat.OPENVINO: [OpenVINOScanner()],
         ModelFormat.GBM_NATIVE: [],
         ModelFormat.TENSORRT: [],
+        ModelFormat.DARKNET: [],
+        ModelFormat.LIGHTGBM: [],
+        ModelFormat.TORCH7: [],
         ModelFormat.ARCHIVE: [ArchiveScanner(depth=depth)],
         ModelFormat.UNKNOWN: [],
     }

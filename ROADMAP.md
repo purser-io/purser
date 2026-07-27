@@ -11,7 +11,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(240 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(250 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -137,6 +137,16 @@ for per-release detail):
   **OpenVINO IR** graph parsing (XXE / DOCTYPE-entity + external library/path refs);
   broadened **TF SavedModel** host-I/O ops and **CoreML** `CustomModel`-backend
   detection.
+- **Format breadth (~35 identified formats).** Added detection for TorchServe
+  `.mar`, MLflow (`MLmodel`), Caffe (`.prototxt`/`.caffemodel`), NeMo `.nemo`,
+  H2O MOJO, Darknet `.weights`, LightGBM native, and Torch7 `.t7`. **Security
+  value split (why these, not just count):** MAR / MLflow / Caffe carry a **real
+  code-execution surface** we were previously blind to — a TorchServe `handler.py`,
+  an MLflow `python_function` loader module, or a Caffe `PythonLayer` all run
+  arbitrary code on load, so these get **dedicated scanners** (`MAR_HANDLER_CODE`,
+  `MLFLOW_PYFUNC_LOADER`, `CAFFE_PYTHON_LAYER`). The rest are **data-only** blobs
+  with no code surface — identified for policy allowlists + exfil scan only, which
+  also stops them being misclassified. (NeMo / MOJO archives are recursed.)
 - **Supply chain:** hash-pinned lockfiles + `--require-hashes`, split core/HF/deep
   Wolfi images, deterministic CycloneDX SBOM, `trivy` + `osv-scanner` CI gates,
   multi-arch `buildx` with SLSA provenance + SBOM attestations, cosign signing.
