@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/purser-io/purser/actions/workflows/ci.yml/badge.svg)](https://github.com/purser-io/purser/actions/workflows/ci.yml)
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-&nbsp;![Version](https://img.shields.io/badge/version-0.2.0-informational.svg)
+&nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
 &nbsp;![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
@@ -53,7 +53,7 @@ scan models against the in-cluster service (rules change via `helm upgrade`, no
 rebuild). Two patterns:
 
 ```bash
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.2.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.2.1 \
   -n purser --create-namespace
 KEY=$(kubectl -n purser get secret purser-auth -o jsonpath='{.data.api-key}' | base64 -d)
 
@@ -89,7 +89,7 @@ scan-models:
 **In GitHub Actions** — the [`purser-io/purser`](action.yml) action does the same in one step and fails the job on findings/blocked:
 
 ```yaml
-- uses: purser-io/purser@v0.2.0   # or pin a commit SHA
+- uses: purser-io/purser@v0.2.1   # or pin a commit SHA
   with:
     path: ./models
     policy: .purser/policy.yaml   # optional; sarif written to purser.sarif
@@ -477,10 +477,10 @@ with `make base-digest`.
 # Pull the published, signed, multi-arch image (also -hf and -deep variants):
 docker run --rm -v $PWD/models:/models:ro -v $PWD/policies:/policies:ro \
   -e PURSER_POLICY=/policies/strict.yaml -p 8080:8080 \
-  ghcr.io/purser-io/purser:0.2.0
+  ghcr.io/purser-io/purser:0.2.1
 # one-shot CLI scan:
 docker run --rm -v $PWD/models:/models:ro \
-  ghcr.io/purser-io/purser:0.2.0 purser scan /models
+  ghcr.io/purser-io/purser:0.2.1 purser scan /models
 
 # …or build locally: make build (core) · make build-hf · make build-deep → purser:dev
 ```
@@ -534,7 +534,7 @@ Secret, and optional HF-worker + deep-companion subcharts (auto-wired):
 
 ```bash
 # published OCI chart (defaults to the ghcr.io/purser-io/purser images)…
-helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.2.0 \
+helm install purser oci://ghcr.io/purser-io/charts/purser --version 0.2.1 \
   -n purser --create-namespace
 # …or from a source checkout: helm install purser deploy/helm/purser ...
 helm test purser -n purser

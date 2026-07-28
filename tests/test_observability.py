@@ -143,3 +143,55 @@ def test_metrics_endpoint_disabled(tmp_path, monkeypatch):
     monkeypatch.setenv("PURSER_METRICS_ENABLED", "0")
     from purser.api import app
     assert TestClient(app).get("/metrics").status_code == 404
+
+
+def test_metrics_responsive_during_scan(tmp_path, monkeypatch):
+    """The in-flight gauge must be observable while a scan runs.
+
+    scan_target is synchronous/CPU-bound; the upload endpoint offloads it with
+    run_in_threadpool so the event loop stays free to serve /metrics. Without
+    that offload the sleep below would block the loop and the concurrent
+    /metrics request would only be served after the scan finished (gauge back
+    to 0) — so this test is a regression guard for that offload.
+    """
+    import asyncio
+    import time as _time
+
+    import httpx
+    from httpx import ASGITransport
+
+    metrics.reset()
+    monkeypatch.setenv("PURSER_API_KEY", "k")
+    monkeypatch.setenv("PURSER_SCAN_ROOT", str(tmp_path))
+    from purser import api
+
+    real_scan = api.scan_target
+
+    def slow_scan(*args, **kwargs):
+        _time.sleep(0.4)                       # simulate a long CPU-bound scan
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(api, "scan_target", slow_scan)
+
+    # minimal valid safetensors: 8-byte LE header length + '{}'
+    blob = (2).to_bytes(8, "little") + b"{}"
+
+    async def scenario():
+        transport = ASGITransport(app=api.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
+            scan = asyncio.create_task(ac.post(
+                "/v1/scan/upload",
+                headers={"X-API-Key": "k"},
+                files={"file": ("m.safetensors", blob)},
+            ))
+            await asyncio.sleep(0.15)           # scan is now in flight
+            mid = await ac.get("/metrics")      # must NOT block behind the scan
+            await scan
+            return mid
+
+    mid = asyncio.run(scenario())
+    assert mid.status_code == 200
+    # the gauge was read as 1 *while* the scan was still running
+    assert "purser_scans_in_progress 1" in mid.text
+    # and it returns to 0 after the scan completes
+    assert "purser_scans_in_progress 0" in metrics.render()

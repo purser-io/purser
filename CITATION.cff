@@ -11,8 +11,8 @@ authors:
 repository-code: "https://github.com/purser-io/purser"
 url: "https://purser-io.io"
 license: Apache-2.0
-version: 0.2.0
-date-released: "2026-07-27"
+version: 0.2.1
+date-released: "2026-07-28"
 keywords:
   - security
   - machine-learning

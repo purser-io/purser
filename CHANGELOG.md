@@ -5,6 +5,20 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
+## [0.2.1] - 2026-07-28
+### Fixed
+- **Upload scans no longer block the event loop.** `POST /v1/scan/upload` is an
+  async handler but ran the synchronous, CPU-bound `scan_target` inline, which
+  stalled the single uvicorn worker for the whole scan — so `/metrics`,
+  `/healthz`, and the liveness probe hung while a scan ran (a large scan could
+  time out Prometheus scrapes and trip a pod restart), and the
+  `purser_scans_in_progress` gauge could never be scraped as non-zero. The scan
+  now runs via `run_in_threadpool`, keeping the loop responsive, making the
+  in-flight gauge observable, and letting `PURSER_MAX_CONCURRENT_SCANS`
+  genuinely gate concurrency. (`scan_path`, a sync `def`, was already offloaded
+  by Starlette.) Guarded by a regression test that asserts `/metrics` responds
+  mid-scan.
+
 ## [0.2.0] - 2026-07-27
 ### Added
 - **Foundation readiness (roadmap #1).** Added a full **OpenSSF Best Practices** *passing*-criteria self-assessment (`docs/openssf-best-practices.md`) — every MUST mapped to in-repo evidence, two justified N/A; the badge is earned by the owner self-certifying at bestpractices.dev. Also a prepared **CNCF Landscape** entry (`docs/cncf-landscape-entry.md`), submission deferred until the landscape's traction/organization inclusion bar is met.
@@ -68,6 +82,7 @@ GitHub notes are generated automatically; this file is the curated summary.
   CLI; Prometheus metrics and an audit log; optional deep-analysis companion;
   digest-pinned Wolfi container images, kustomize manifests, and a Helm chart.
 
+[0.2.1]: https://github.com/purser-io/purser/releases/tag/v0.2.1
 [0.2.0]: https://github.com/purser-io/purser/releases/tag/v0.2.0
 [0.1.3]: https://github.com/purser-io/purser/releases/tag/v0.1.3
 [0.1.2]: https://github.com/purser-io/purser/releases/tag/v0.1.2

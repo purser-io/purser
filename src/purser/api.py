@@ -44,6 +44,7 @@ import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
@@ -228,7 +229,12 @@ async def scan_upload(
                     raise HTTPException(status_code=413, detail="upload too large")
                 out.write(chunk)
         with _ScanSlot():
-            report = scan_target(dest, policy=pol, origin=origin, publisher=publisher)
+            # scan_target is synchronous and CPU-bound; run it off the event loop
+            # so /metrics, /healthz, and the liveness probe stay responsive — and
+            # the in-flight gauge stays observable — while a scan is running.
+            report = await run_in_threadpool(
+                scan_target, dest, policy=pol, origin=origin, publisher=publisher
+            )
         report.target = safe_name
         for fr in report.files:
             fr.path = Path(fr.path).name
