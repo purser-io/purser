@@ -31,7 +31,7 @@ passing requirement's floor, noted for transparency).
 | Public version-controlled source | Met | public git repo |
 | Tracks changes + interim versions (distributed VCS) | Met | git |
 | Unique version numbering | Met | SemVer in `pyproject.toml` / `Chart.yaml` |
-| Semantic versioning | Met | `0.1.x`; tags `v0.1.0`…`v0.1.3` |
+| Semantic versioning | Met | `0.1.x`; tags `v0.1.0`…`v0.2.0` |
 | Release notes for each release | Met | `CHANGELOG.md` (Keep-a-Changelog) + GitHub Releases |
 
 ## Reporting

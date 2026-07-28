@@ -5,7 +5,7 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-27
 ### Added
 - **Foundation readiness (roadmap #1).** Added a full **OpenSSF Best Practices** *passing*-criteria self-assessment (`docs/openssf-best-practices.md`) — every MUST mapped to in-repo evidence, two justified N/A; the badge is earned by the owner self-certifying at bestpractices.dev. Also a prepared **CNCF Landscape** entry (`docs/cncf-landscape-entry.md`), submission deferred until the landscape's traction/organization inclusion bar is met.
 - **Validation benchmark corpus expanded to 75 real models** (roadmap #1). The benign negative set grew from 14 to **75 pinned HuggingFace models** — a broad architecture sweep (encoders, causal/seq2seq LMs, vision, audio, multimodal) across pickle / safetensors / ONNX / Keras incl. int8-quantized ONNX — re-measured at **0% FPR** (0/79), TPR 100%. `fetch_benign.py` now pins one representative ONNX per repo (primary + quantized) rather than every quantization variant, keeping the corpus CI-friendly.
@@ -68,6 +68,7 @@ GitHub notes are generated automatically; this file is the curated summary.
   CLI; Prometheus metrics and an audit log; optional deep-analysis companion;
   digest-pinned Wolfi container images, kustomize manifests, and a Helm chart.
 
+[0.2.0]: https://github.com/purser-io/purser/releases/tag/v0.2.0
 [0.1.3]: https://github.com/purser-io/purser/releases/tag/v0.1.3
 [0.1.2]: https://github.com/purser-io/purser/releases/tag/v0.1.2
 [0.1.1]: https://github.com/purser-io/purser/releases/tag/v0.1.1

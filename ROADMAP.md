@@ -4,7 +4,7 @@ Forward-looking work. Competitive positioning is in the
 [comparison chart](README.md#how-purser-compares); shipped history is in
 [`CHANGELOG.md`](CHANGELOG.md). This file tracks what is **not done yet** and why.
 
-Purser is released and installable (**v0.1.3** — on PyPI, with signed multi-arch
+Purser is released and installable (**v0.2.0** — on PyPI, with signed multi-arch
 container images and a signed Helm chart on GHCR, built and published by CI). The
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
@@ -112,7 +112,7 @@ live under *Candidates — detection depth* above.
 Moved out of the roadmap now that they're done (see [`CHANGELOG.md`](CHANGELOG.md)
 for per-release detail):
 
-- **Public release & distribution (v0.1.0 → v0.1.3):** public git repo with
+- **Public release & distribution (v0.1.0 → v0.2.0):** public git repo with
   protected `main`; GitHub Actions CI (lint + test matrix 3.11–3.14, lockfile /
   license gates, Helm lint, image builds + Trivy) and a tag-driven release
   pipeline; **PyPI** publishing via OIDC Trusted Publishing; public multi-arch
