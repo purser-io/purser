@@ -146,6 +146,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Open / update refresh PR
+        id: cpr
         if: steps.check.outputs.drift == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
@@ -161,6 +162,36 @@ jobs:
             wolfi-base
             dependencies
           body: ${{ steps.body.outputs.body }}
+
+      # Self-cleaning: once a refresh PR is open (drift handled) or the base is
+      # current again (PR merged), close any stale `wolfi-base` issue left by an
+      # earlier run so drift state isn't tracked in two places.
+      - name: Close stale drift issue
+        if: >-
+          always() &&
+          (steps.check.outputs.drift == 'false' ||
+           (steps.check.outputs.drift == 'true' && steps.cpr.outputs.pull-request-number))
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const prUrl = "${{ steps.cpr.outputs.pull-request-url }}";
+            const reason = prUrl
+              ? `Superseded by the auto-refresh PR: ${prUrl}. Closing — the bump is tracked there.`
+              : "Wolfi base is current again; closing this drift issue.";
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: "open", labels: "wolfi-base",
+            });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, body: reason,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, state: "closed",
+              });
+            }
 
       - name: Fallback issue if the refresh run errored
         if: failure()
