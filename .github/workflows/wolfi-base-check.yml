@@ -157,6 +157,7 @@ jobs:
             Dockerfile.hf
             Dockerfile.deep
           commit-message: "build(deps): bump wolfi-base pin to ${{ steps.check.outputs.live }}"
+          signoff: true
           title: "build(deps): refresh Wolfi base image"
           labels: |
             wolfi-base
