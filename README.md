@@ -294,8 +294,34 @@ commit** signatures are online-only and out of scope for the offline scanner.
 
 ## Install and CLI usage
 
+Purser ships on two channels — the **PyPI package** (with optional extras) and
+**prebuilt container images** on GHCR. Pick by how you run it:
+
+**From PyPI** — one package, optional extras (`pip install "purser[<extra>]"`):
+
+| Extra | Adds | Enables |
+|---|---|---|
+| *(none)* | core scanner, CLI, REST API | scanning + policy |
+| `sign` | `cryptography` | Ed25519 signing / verification |
+| `sigstore` | `sigstore` | verified-identity (Fulcio/Rekor) provenance |
+| `hf` | `huggingface_hub` | `purser scan hf://org/model` |
+| `h5` | `h5py` | deeper Keras `.h5` parsing |
+
+Extras combine, e.g. `pip install "purser[sign,hf]"`.
+
+**From GHCR** — prebuilt, signed, multi-arch images (`docker pull ghcr.io/purser-io/<image>`):
+
+| Image | Contents | For |
+|---|---|---|
+| `purser` | core | scan service / CLI |
+| `purser-hf` | core + `[hf]` extra | HuggingFace worker (Helm `hf.enabled`) |
+| `purser-deep` | deep analyzers | gadget-chain / tampering companion (Helm `deep.enabled`) |
+
+The `-hf` / `-deep` images simply pre-bundle what you'd otherwise add as a PyPI
+extra — same capability, different distribution channel.
+
 ```bash
-pip install "purser[sign]"    # +[hf] HuggingFace download, +[h5] h5py; or install from source
+pip install "purser[sign]"    # or "purser[sign,hf]"; see the extras table above
 purser scan model.pt
 purser scan ./model-dir --policy policies/strict.yaml
 purser scan hf://deepseek-ai/DeepSeek-R1 --policy policies/strict.yaml   # needs [hf]

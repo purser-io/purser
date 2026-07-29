@@ -67,7 +67,7 @@ liveness/readiness/startup probes on `/healthz`.
 | `metrics.serviceMonitor.enabled` | `false` | Prometheus Operator |
 | `metrics.prometheusRule.enabled` | `false` | starter alert set (Prometheus Operator) |
 | `modelStore.enabled` | `false` | mount a PVC for `/v1/scan/path` |
-| `deep.enabled` / `hf.enabled` | `false` | optional companions |
+| `deep.enabled` / `hf.enabled` | `false` | optional companions — deploy the `purser-deep` / `purser-hf` images (see the [distributions table](../../../README.md#install-and-cli-usage) for how these images map to the PyPI extras) |
 | `admission.enabled` | `false` | ValidatingAdmissionWebhook: require image-digest pinning + approved-model digests at deploy time |
 | `admission.approvedDigests` | `[]` | SHA-256s of models that passed a scan (a declared model must be listed) |
 | `admission.failurePolicy` | `Fail` | `Ignore` to fail-open at the API-server level |
