@@ -1,8 +1,12 @@
 # Watches the Chainguard Wolfi base image. The Dockerfiles pin wolfi-base by
 # digest for reproducibility; Chainguard rebuilds `:latest` frequently to pick
-# up CVE fixes, so a static pin silently goes stale. This job compares the pin
-# against the live index digest weekly and opens/updates an issue on drift.
-name: Wolfi base drift
+# up CVE fixes, so a static pin silently goes stale. Weekly this job compares the
+# pin against the live index digest and, on drift, **auto-refreshes**: it bumps
+# the pin in all three Dockerfiles, rebuilds each image, runs Trivy (the same
+# HIGH/CRITICAL fixed-only gate as CI) on the new base, and opens a PR with the
+# result. If the run itself errors, it falls back to opening an issue so drift is
+# never silent. (Manual path: `make base-digest` still prints the live digest.)
+name: Wolfi base auto-refresh
 
 on:
   schedule:
@@ -12,15 +16,21 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wolfi-base-refresh
+  cancel-in-progress: false
+
 jobs:
-  check:
+  refresh:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      issues: write
+      contents: write        # push the refresh branch
+      pull-requests: write   # open/update the PR
+      issues: write          # fallback issue if the run errors
     steps:
       - uses: actions/checkout@v7
-      - name: Compare pinned digest against live latest
+
+      - name: Resolve pinned vs live base digest
         id: check
         run: |
           set -euo pipefail
@@ -32,6 +42,10 @@ jobs:
             -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
             "https://cgr.dev/v2/chainguard/wolfi-base/manifests/latest" \
             | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')
+          if [ -z "$pinned" ] || [ -z "$live" ]; then
+            echo "could not resolve digests (pinned='$pinned' live='$live')" >&2
+            exit 1
+          fi
           echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
           echo "live=$live"     >> "$GITHUB_OUTPUT"
           echo "Pinned: $pinned"
@@ -40,28 +54,136 @@ jobs:
             echo "drift=false" >> "$GITHUB_OUTPUT"
             echo "Base image is current."
           else
-            echo "drift=true"  >> "$GITHUB_OUTPUT"
+            echo "drift=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open / update drift issue
+      - name: Bump the pin in all Dockerfiles
         if: steps.check.outputs.drift == 'true'
+        run: |
+          set -euo pipefail
+          for f in Dockerfile Dockerfile.hf Dockerfile.deep; do
+            sed -i "s#${{ steps.check.outputs.pinned }}#${{ steps.check.outputs.live }}#g" "$f"
+          done
+          git --no-pager diff -- Dockerfile Dockerfile.hf Dockerfile.deep
+
+      - name: Build all three images on the new base
+        id: build
+        if: steps.check.outputs.drift == 'true'
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          rc=0
+          docker build -t purser-core:refresh -f Dockerfile     . || rc=1
+          docker build -t purser-hf:refresh   -f Dockerfile.hf   . || rc=1
+          docker build -t purser-deep:refresh -f Dockerfile.deep . || rc=1
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit $rc
+
+      - name: Trivy — core
+        id: tv_core
+        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: purser-core:refresh
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Trivy — hf
+        id: tv_hf
+        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: purser-hf:refresh
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Trivy — deep
+        id: tv_deep
+        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: purser-deep:refresh
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Assemble PR body
+        id: body
+        if: steps.check.outputs.drift == 'true'
+        run: |
+          verdict() {
+            case "$1" in
+              success) echo "✅ build + Trivy clean" ;;
+              failure) echo "⚠️ Trivy found fixable HIGH/CRITICAL — review" ;;
+              *)       echo "— not scanned (image failed to build)" ;;
+            esac
+          }
+          {
+            echo "body<<PRBODY"
+            echo "Automated Wolfi base refresh — Chainguard rebuilt \`cgr.dev/chainguard/wolfi-base:latest\`, so the digest pin went stale."
+            echo ""
+            echo "| | digest |"
+            echo "|---|---|"
+            echo "| old (pinned) | \`${{ steps.check.outputs.pinned }}\` |"
+            echo "| new (\`:latest\`) | \`${{ steps.check.outputs.live }}\` |"
+            echo ""
+            echo "**Build + Trivy on the new base** (HIGH/CRITICAL, fixed-only — same gate as CI):"
+            echo "- core: $(verdict '${{ steps.tv_core.outcome }}')"
+            echo "- hf:   $(verdict '${{ steps.tv_hf.outcome }}')"
+            echo "- deep: $(verdict '${{ steps.tv_deep.outcome }}')"
+            if [ "${{ steps.build.outputs.rc }}" != "0" ]; then
+              echo ""
+              echo "> ⚠️ One or more images **failed to build** on the new base — investigate before merging."
+            fi
+            echo ""
+            echo "> Note: PRs opened by \`GITHUB_TOKEN\` do not trigger \`ci.yml\`, so the build + Trivy above is the authoritative gate. A maintainer can re-run CI (close/reopen the PR) before merge if desired."
+            echo "PRBODY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open / update refresh PR
+        if: steps.check.outputs.drift == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: wolfi-base-refresh
+          delete-branch: true
+          add-paths: |
+            Dockerfile
+            Dockerfile.hf
+            Dockerfile.deep
+          commit-message: "build(deps): bump wolfi-base pin to ${{ steps.check.outputs.live }}"
+          title: "build(deps): refresh Wolfi base image"
+          labels: |
+            wolfi-base
+            dependencies
+          body: ${{ steps.body.outputs.body }}
+
+      - name: Fallback issue if the refresh run errored
+        if: failure()
         uses: actions/github-script@v9
         with:
           script: |
-            const pinned = "${{ steps.check.outputs.pinned }}";
-            const live   = "${{ steps.check.outputs.live }}";
-            const title  = "Wolfi base image is out of date";
+            const pinned = "${{ steps.check.outputs.pinned }}" || "(unresolved)";
+            const live   = "${{ steps.check.outputs.live }}"   || "(unresolved)";
+            const title  = "Wolfi base auto-refresh failed";
+            const run    = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
-              "The pinned `cgr.dev/chainguard/wolfi-base:latest` digest is stale.",
+              "The Wolfi base **auto-refresh** run errored — drift may be unhandled.",
               "",
               "| | digest |",
               "|---|---|",
               "| pinned (Dockerfiles) | `" + pinned + "` |",
               "| live `:latest` | `" + live + "` |",
               "",
-              "Update the `ARG WOLFI=...@<digest>` line in `Dockerfile`, " +
-              "`Dockerfile.hf`, and `Dockerfile.deep` to the live digest " +
-              "(`make base-digest` prints it), then rebuild.",
+              "Run log: " + run,
+              "",
+              "Fix manually if needed: bump the `ARG WOLFI=...@<digest>` line in " +
+              "`Dockerfile`, `Dockerfile.hf`, and `Dockerfile.deep` to the live " +
+              "digest (`make base-digest` prints it), then rebuild.",
             ].join("\n");
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
