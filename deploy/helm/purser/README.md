@@ -40,6 +40,14 @@ rotate on `helm upgrade`).
 | — | NetworkPolicy (`networkPolicy.enabled`) |
 | — | Admission webhook (`admission.enabled`) — deploy-time verdict + digest enforcement |
 
+With `metrics.serviceMonitor.enabled` + `metrics.prometheusRule.enabled` against a
+Prometheus/Grafana stack, importing [`deploy/grafana/purser-overview.json`](../../grafana/purser-overview.json)
+gives a security overview:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/purser-io/purser/main/assets/grafana-dashboard.png" alt="Purser Grafana dashboard" width="100%" />
+</p>
+
 Hardening applied to every workload: non-root `10001:10001`, read-only root FS,
 all capabilities dropped, `seccompProfile: RuntimeDefault`, no privilege
 escalation, `automountServiceAccountToken: false`, resource requests/limits, and

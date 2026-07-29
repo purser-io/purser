@@ -390,7 +390,13 @@ are) — **network-restrict it** or disable with `PURSER_METRICS_ENABLED=0`.
 **Grafana.** Import [`deploy/grafana/purser-overview.json`](deploy/grafana/purser-overview.json)
 — panels for verdict rate, threat categories, policy blocks by reason,
 provenance status, origin-country mix, format mix, request rejections, p95
-latency, and in-flight scans. Example PromQL:
+latency, and in-flight scans.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/purser-io/purser/main/assets/grafana-dashboard.png" alt="Purser Grafana dashboard: verdict rates, findings by threat category, policy blocks by reason, provenance status, country-of-origin and format mix, API rejections, throughput, and in-flight scans" width="100%" />
+</p>
+
+Example PromQL:
 
 ```promql
 sum by (verdict)  (rate(purser_scans_total[$__rate_interval]))          # verdict rate
