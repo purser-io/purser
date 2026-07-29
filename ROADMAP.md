@@ -73,13 +73,32 @@ it is **out of scope** for a scanner that never loads the model.)*
 |---|---|
 | Origin database provenance | `org_countries.yaml` is a hand-maintained heuristic; document sourcing + a review cadence, or derive origin only from verified signers once the PKI trust root lands. |
 
+## Candidates — ecosystem intelligence & provenance interop
+
+Prompted by a review of dynamic-eval / governance vendors (SurePath → F5, Weights
+& Biases, Seekr) and the model-threat-feed landscape. **The framing that survives
+that review:** *bias, reliability, adversarial-robustness, and behavioral
+poisoning are all **dynamic*** — they require **running** the model against inputs
+— so they are not the static core's job (see *Out of scope → Dynamic evaluation*).
+What a never-execute scanner *can* add is (a) **ingesting** existing threat/verdict
+intelligence and (b) **provenance/attestation** depth and interop.
+
+| Item | Notes |
+|---|---|
+| **Upstream scan-verdict enrichment (HuggingFace)** | The HF Hub already exposes per-file verdicts from Protect AI, JFrog, ClamAV (Cisco), and picklescan via `GET /api/models/{repo}/tree/{rev}?expand=true` → `securityFileStatus` (coarse `?securityStatus=true`). Free, per-commit, **no bulk endpoint** (one call/repo, cache by commit sha). Candidate for the **`-hf` path** (network already gated there): surface an `unsafe`/`suspicious` upstream verdict as a corroborating finding. **Rule: treat `unsafe` as signal; never let upstream `safe` downgrade Purser's own verdict** (FN history: nullifAI 7z, picklescan zero-days). Closest thing to a real "model threat feed" that exists — free, secondhand commercial intel. |
+| **Loader-CVE mapping (OSV/GHSA, offline)** | No feed of malicious *models* exists, but framework/parser CVEs do: map a detected format + declared version to known load-time RCEs (`.keras`/`.h5` CVE-2025-9906/-9905 `safe_mode` bypass, Keras Lambda CVE-2024-3660, llama.cpp GGUF parser CVEs; CWE-502 class). Ingest bulk **OSV-JSON** (`ossf/osv-schema`, CC-BY-4.0) or the GHSA mirror **offline**; emit "load-unsafe under `<framework> <version>`". Also flags OSV `MAL-` malicious-*package* records against bundled deps. |
+| **MITRE ATLAS technique tagging** | Tag findings with `AML.T####` IDs from `mitre-atlas/atlas-data` (YAML / STIX 2.1, free, monthly). Enrichment/credibility only — not a signature source. Cheap to ingest; aligns reports with the framework reviewers expect. |
+| **Known-bad denylist + refresh** | A first-class `denylist` policy dimension (SHA-256 hashes + publisher/repo globs), refreshable offline like AV signatures, **populated from** the sources above (HF `unsafe`, huntr → CVE, operator curation). The policy engine already has publisher/name blocklists (a `models` example even names `known-cve-model`); this generalizes it and adds content hashes. A genuine **open** malicious-model hash/IOC feed is a market gap Purser could help seed. |
+| **Signed AIBOM (model bill-of-materials)** | Extend the CycloneDX SBOM (today: the *package*) to a signed **model AIBOM** — files, hashes, formats, detected code surfaces, provenance/identity, verdict — as a cosign attestation. The static-provenance answer to W&B lineage (checksum/tamper-only, no signing) and to HiddenLayer's "AIBOM" marketing — but open and signed. |
+| **Provenance interop (W&B / registry)** | Read a W&B **Artifact manifest + digest + lineage DAG** (open-source SDK, no execution) as a provenance signal, and ship a **W&B Automations → webhook** gate recipe: scan on new version/alias, block promotion to a **protected alias** (`Production`) on FAIL. Generalizes to any registry with a promotion webhook. |
+| **Model-card / eval-attestation gate** | Static "visibility into bias/reliability" *without computing it*: a policy dimension that reads a declared eval/safety card (HF model card, an eval-results file, or a Seekr-style "Model Test Card" if present) and gates on **attested** claims (require a card; require declared eval coverage; block if a declared score is below a floor), cross-checking any hashes the card references against the actual files. Governs the *attestation*, not the model — keeps the never-execute guarantee. |
+
 ## Candidates — operability
 
 | Item | Notes |
 |---|---|
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
 | Exfil scan latency on huge models | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats, or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
-| Wolfi base auto-refresh | Drift *detection* already ships (weekly `wolfi-base-check.yml` opens an issue on a stale digest). Nice-to-have: auto-rebuild + `trivy` + open a PR, vs. today's manual `make base-digest` bump. |
 
 ## Candidates — distribution / UX
 
@@ -100,10 +119,10 @@ live under *Candidates — detection depth* above.
 | Pickle gadget-chain reachability | *Heuristic* gadget-composition detection ships in the **`purser-deep`** companion (pivot primitives, complex graphs, deep imports). Full reachability/soundness is still infeasible statically; the robust guarantee remains the ban-pickle allowlist policy (`signed-only.yaml`). |
 | Graph `declared`-vs-`reachable` dataflow (TF / Paddle / CoreML / ONNX) | Purser flags **declared** dangerous ops / custom code (the conservative, safe choice for a gate). Pruning to only *reachable* ops needs the framework's own graph semantics at model-load — which a no-load scanner won't do. Flagging a declared dangerous op even if a particular graph prunes it is the intended, fail-safe behavior; deep runtime reachability is enterprise/dynamic-analysis territory. |
 | Weight *steganography / tampering* | Covered by **`purser-deep`** (`deep.weights`): hidden data in tensor low-bit planes, non-finite weights, size mismatches — static, no model load. |
-| Weight *behavioral* backdoors | Out of scope: detecting *trained* triggers / poisoning needs model-evaluation, not container/static analysis. Commercial platforms (see comparison chart) cover it. |
+| Dynamic evaluation — bias, reliability, adversarial-robustness, behavioral backdoors / poisoning | Out of scope for the never-execute **core**: all require **running** the model against inputs. The vendors in this space are dynamic (Seekr *SeekrGuard*, W&B *Weave* scorers, F5/SurePath red-team, `garak`, `promptfoo`). If pursued, this is a **separate opt-in companion** (as `purser-deep` is a separate image) that wraps existing eval / red-team tooling — never folded into the static core. Static weight *steganography / tampering* is already covered by `purser-deep`. |
 | Determined / volumetric DoS | The concurrency cap, per-client rate limit, and per-file windowing bound resource use, but absorbing a determined flood is the job of an edge proxy / WAF / autoscaler, not the scanner. |
 | Spoofed provenance when signing is not required | By design, origin/publisher is *advisory* unless a policy sets `require_signed`. Enforce trust with `policies/signed-only.yaml` + a trust store; Purser will not treat unsigned claims as authoritative on its own. |
-| CVE / threat-intel feeds, dashboards | Enterprise-platform territory (Guardian, HiddenLayer); out of scope for a self-hosted OSS scanner. |
+| Threat-intel **dashboards / hosted feed service** | Running a hosted threat-intel service or SOC dashboards is enterprise-platform territory (Guardian, HiddenLayer). **Correction (2026-07):** *ingesting* existing free feeds (HF scan verdicts, OSV/GHSA loader-CVEs, MITRE ATLAS) and maintaining an offline known-bad denylist are **no longer out of scope** — they moved to *Candidates — ecosystem intelligence & provenance interop*. There is still **no** open feed of malicious *model artifacts* to consume; that gap is real. |
 
 ---
 
@@ -131,7 +150,12 @@ for per-release detail):
   gates on detection/FPR/evasion regression (`benchmarks/`).
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
-- **Wolfi base drift detection:** a scheduled CI job flags a stale base digest.
+- **Wolfi base auto-refresh:** a weekly CI job (`wolfi-base-check.yml`) detects a
+  stale base digest and **auto-refreshes** — bumps the pin in all three
+  Dockerfiles, rebuilds each image, runs Trivy (HIGH/CRITICAL, fixed-only — the CI
+  gate) on the new base, and opens a **PR** with the per-image result (falling back
+  to an issue only if the run itself errors). Supersedes the earlier detect-and-
+  open-an-issue job; manual `make base-digest` still prints the live digest.
 - **Provenance:** Ed25519 model signing + trust store, `require_signed` policy,
   and key **revocation / validity windows**; **Sigstore (Fulcio/Rekor) verified
   identity** — offline bundle verification against a vendored trust root, with an
