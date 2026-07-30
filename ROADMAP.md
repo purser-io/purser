@@ -62,7 +62,6 @@ it is **out of scope** for a scanner that never loads the model.)*
 | Item | Notes |
 |---|---|
 | Per-format op/custom-code depth | **Shipped** for every format where static analysis is feasible: pickle opcodes, Keras (incl. non-`Lambda` custom layers), ONNX, TF SavedModel (exec + host-I/O ops), TFLite, GGUF, Paddle (`py_func`), CoreML (`CustomModel` + custom layers), and OpenVINO IR. TensorRT/MXNet stay format-ID + exfil. The one thing left — `declared`-vs-`reachable` dataflow — is **out of scope** (see below). |
-| Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
 | More exfil encodings | UTF-16, base64/hex/base32/base85, one gzip/zlib layer, and **single-byte XOR** are covered — decoded blobs are only flagged when they resolve to a real endpoint/command indicator, so no rise in the false-positive rate (verified 0% over the real-model set). Remaining: **multi-byte / rolling-key XOR** (infeasible to key-recover generally). Note: the XOR path deliberately confirms only *structural* indicators (webhook/URL/code/private-key), not narrow-charset credential regexes, which alias with quantized weight bytes. |
 | Packed-binary C2 endpoints | Endpoints stored as packed bytes (no ASCII/UTF-16 form) aren't extracted; needs structured per-format parsing. |
 
@@ -169,6 +168,19 @@ for per-release detail):
   operator assertion to a verified external root.
 - **Detection:** `trust_remote_code` AST scanner + `auto_map` config scanner;
   exfil UTF-16 / hex / base32 / base85 / gzip / single-byte-XOR decoding; configurable benign-host allowlist.
+- **Python source dataflow/taint:** an intraprocedural, per-scope taint pass over
+  bundled `.py` that catches payloads the literal name-match misses — a dangerous
+  callable **aliased** to a variable then invoked (`sink = os.system; sink(cmd)` —
+  previously *nothing*), a callable **dynamically resolved** from a decoded/
+  char-assembled name (`getattr(os, decoded)(...)`), and **deobfuscated data**
+  passed to a code-exec/os/native sink (`exec(b64decode(...))`). Analysis is
+  per-scope so a variable name in one function can't taint a sibling's (kills the
+  cross-context FP), and sinks are narrowed to the code-execution surface — over a
+  4,854-file real-Python corpus it fires **twice** (both genuine `ctypes.WinDLL`
+  aliases). Deliberate non-goals: cross-scope (closure) taint and pure
+  string-literal split names (`"sy"+"stem"`) stay at the existing MEDIUM
+  getattr-indirection signal. New rules `PY_DYNAMIC_CALL` / `PY_TAINTED_FLOW`;
+  adds the `alias-callable` evasion sample (recall 17/17).
 - **Protocol-0/1 (ASCII) pickle spoof:** an ASCII pickle disguised under a
   structured-binary extension (`.onnx`/`.pb`/`.tflite`/`.pte`/`.pdmodel`) is now
   confirmed via a `pickletools.genops` trial-parse and routed to the pickle

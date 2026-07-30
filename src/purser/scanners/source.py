@@ -93,6 +93,207 @@ def _classify(dotted: str) -> tuple[Severity, str] | None:
     return None
 
 
+# --------------------------------------------------------------------------
+# Intraprocedural taint: catch payloads assembled / resolved at runtime that a
+# literal name match misses. Two conservative, low-false-positive analyses:
+#   * DATA taint  — values produced by deobfuscation (base64/hex/codec decode)
+#     or char-code assembly (`chr`/`bytes([ints])`); flagged only when they
+#     reach a dangerous sink or are invoked as a callable.
+#   * CALLABLE aliasing — a variable bound to a dangerous callable (`f =
+#     os.system`) or to a dynamically-resolved one (`f = getattr(os, <tainted>)`);
+#     flagged when it is later called. Benign model code virtually never aliases
+#     os/exec/subprocess/... to a name and invokes it, nor decodes-then-executes.
+# Each runs per scope (module top-level + each function/lambda independently),
+# flow-insensitively (a fixpoint over that scope's assignments) — conservative
+# within a scope, but a name in one function can't taint a sibling's same-named
+# variable.
+
+# Deliberately narrow: only the code-execution surface. Aliasing/decoding into
+# network / dynamic-import / pickle sinks is common in benign library code (and
+# those sinks are already name-matched + covered by the exfil engine), so
+# including them makes the taint pass noisy. Verified against a real-Python
+# corpus (site-packages): this set keeps it near-zero-FP.
+_SINK_TAGS = {"code-execution", "os-command", "native-code"}
+
+
+def _target_names(target: ast.AST) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: list[str] = []
+        for elt in target.elts:
+            names.extend(_target_names(elt))
+        return names
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    return []
+
+
+def _is_taint_source(dotted: str, node: ast.Call) -> bool:
+    """A call whose *result* is a deobfuscated / runtime-assembled value."""
+    if dotted in DECODER_CALLS or dotted == "chr":
+        return True
+    if dotted in ("bytes", "bytearray") and node.args and isinstance(
+        node.args[0], (ast.List, ast.Tuple, ast.ListComp, ast.GeneratorExp, ast.SetComp)
+    ):
+        return True
+    return False
+
+
+def _expr_taints(node: ast.AST | None, tainted: set[str]) -> bool:
+    """True if evaluating `node` may yield tainted (deobfuscated/assembled) data."""
+    if node is None:
+        return False
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and sub.id in tainted:
+            return True
+        if isinstance(sub, ast.Call):
+            d = _dotted(sub.func)
+            if d and _is_taint_source(d, sub):
+                return True
+    return False
+
+
+def _scopes(tree: ast.AST):
+    """Yield each analysis scope: the module, then every function / lambda.
+    Taint is computed per-scope so a variable named `x` in one function can't
+    poison an unrelated `x` in a sibling (the whole-module merge is a real FP
+    source — e.g. numpy's tests reuse names like `method` across test funcs)."""
+    yield tree
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            yield node
+
+
+def _own_nodes(scope: ast.AST) -> list[ast.AST]:
+    """Descendants of `scope` that execute in *this* scope — i.e. not inside a
+    nested function / lambda body (those are separate scopes)."""
+    if isinstance(scope, ast.Lambda):
+        roots = [scope.body]
+    else:
+        roots = list(getattr(scope, "body", []))
+    out: list[ast.AST] = []
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        # A nested function/lambda is a separate scope — don't include it or
+        # descend into its body (its own `_scopes` entry handles it).
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        out.append(node)
+        stack.extend(ast.iter_child_nodes(node))
+    return out
+
+
+def _assignments(nodes: list[ast.AST]):
+    for node in nodes:
+        if isinstance(node, ast.Assign):
+            yield node.targets, node.value, False
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            yield [node.target], node.value, False
+        elif isinstance(node, ast.AugAssign):
+            yield [node.target], node.value, True
+        elif isinstance(node, ast.NamedExpr):
+            yield [node.target], node.value, False
+
+
+def _data_tainted_names(nodes: list[ast.AST]) -> set[str]:
+    tainted: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for targets, value, is_aug in _assignments(nodes):
+            names = [n for t in targets for n in _target_names(t)]
+            if not names:
+                continue
+            aug_self = is_aug and any(n in tainted for n in names)
+            if aug_self or _expr_taints(value, tainted):
+                for n in names:
+                    if n not in tainted:
+                        tainted.add(n)
+                        changed = True
+    return tainted
+
+
+def _callable_source(value: ast.AST, aliases: dict[str, tuple[Severity, str]],
+                     data_tainted: set[str]) -> tuple[Severity, str] | None:
+    """If `value` evaluates to a dangerous callable, return its (severity, tag)."""
+    if isinstance(value, (ast.Name, ast.Attribute)):
+        dotted = _dotted(value)
+        if dotted:
+            if dotted in ("exec", "eval", "compile"):
+                return (Severity.CRITICAL, "code-execution")
+            verdict = _classify(dotted)
+            if verdict and verdict[1] in _SINK_TAGS:
+                return verdict
+            if dotted in aliases:                 # y = x (alias of an alias)
+                return aliases[dotted]
+    if isinstance(value, ast.Call):
+        d = _dotted(value.func)
+        if d == "getattr" and len(value.args) >= 2 and _expr_taints(value.args[1], data_tainted):
+            return (Severity.CRITICAL, "indirection")   # os.system resolved from decoded name
+    return None
+
+
+def _callable_aliases(nodes: list[ast.AST], data_tainted: set[str]) -> dict[str, tuple[Severity, str]]:
+    aliases: dict[str, tuple[Severity, str]] = {}
+    changed = True
+    while changed:
+        changed = False
+        for targets, value, is_aug in _assignments(nodes):
+            if is_aug:
+                continue
+            info = _callable_source(value, aliases, data_tainted)
+            if info is None:
+                continue
+            for t in targets:
+                for n in _target_names(t):
+                    if n not in aliases:
+                        aliases[n] = info
+                        changed = True
+    return aliases
+
+
+def _scope_taint_hits(nodes: list[ast.AST], data_tainted: set[str],
+                      aliases: dict[str, tuple[Severity, str]], on_import: bool):
+    """Sinks in one scope reached by tainted data or invoked via an aliased /
+    dynamically-resolved callable. Returns
+    (rule, name, sev, tag, line, on_import, arg_tainted) tuples."""
+    hits: list[tuple[str, str, Severity, str, int, bool, bool]] = []
+    for node in nodes:
+        if not isinstance(node, ast.Call):
+            continue
+        line = getattr(node, "lineno", 0)
+        func = node.func
+        arg_tainted = any(_expr_taints(a, data_tainted) for a in node.args) or any(
+            _expr_taints(kw.value, data_tainted) for kw in node.keywords)
+
+        # (1) invoking a dynamically-resolved / aliased callable
+        if isinstance(func, ast.Name) and func.id in aliases:
+            sev, tag = aliases[func.id]
+            hits.append(("PY_DYNAMIC_CALL", func.id, sev, tag, line, on_import, arg_tainted))
+        elif isinstance(func, ast.Call) and _dotted(func.func) == "getattr" \
+                and len(func.args) >= 2 and _expr_taints(func.args[1], data_tainted):
+            hits.append(("PY_DYNAMIC_CALL", "getattr", Severity.CRITICAL,
+                         "indirection", line, on_import, arg_tainted))
+        # (2) a known dangerous sink fed a tainted argument
+        elif arg_tainted:
+            dotted = _dotted(func)
+            if dotted:
+                tag = None
+                if dotted in ("exec", "eval", "compile"):
+                    tag = "code-execution"
+                else:
+                    verdict = _classify(dotted)
+                    if verdict and verdict[1] in _SINK_TAGS:
+                        tag = verdict[1]
+                if tag:
+                    # every _SINK_TAGS tag is a code-execution surface -> CRITICAL
+                    hits.append(("PY_TAINTED_FLOW", dotted, Severity.CRITICAL, tag,
+                                 line, on_import, True))
+    return hits
+
+
 class _Visitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.func_depth = 0
@@ -202,7 +403,55 @@ class PythonSourceScanner(Scanner):
                 tags=["secret", "trust-remote-code"],
                 evidence={"line": visitor.env_line},
             ))
+
+        findings.extend(self._taint_findings(tree))
         return findings
+
+    def _taint_findings(self, tree: ast.AST) -> list[Finding]:
+        """Dataflow pass: payloads assembled/deobfuscated at runtime or invoked
+        via an aliased/dynamically-resolved callable — what a literal name match
+        alone would miss or under-rate."""
+        hits: list[tuple[str, str, Severity, str, int, bool, bool]] = []
+        for scope in _scopes(tree):
+            own = _own_nodes(scope)
+            data_tainted = _data_tainted_names(own)
+            aliases = _callable_aliases(own, data_tainted)
+            # Run per-scope even with no tainted *variables* — an inline source in
+            # a sink argument (e.g. `exec(b64decode(...))`) has no binding but is
+            # still a staged payload.
+            hits.extend(_scope_taint_hits(own, data_tainted, aliases, scope is tree))
+        out: list[Finding] = []
+        seen: set[tuple[str, str, int]] = set()
+        for rule, name, sev, tag, line, on_import, arg_tainted in hits:
+            key = (rule, name, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            scope = (" at module scope (runs the moment the module is imported)"
+                     if on_import else " inside a function")
+            if rule == "PY_DYNAMIC_CALL":
+                title = "Bundled Python invokes a runtime-resolved callable"
+                detail = (
+                    f"`{name}` is a callable resolved at runtime — aliased from a "
+                    "dangerous call or assembled/decoded — and is then invoked"
+                    f"{scope}. This evades a static match on the literal call name"
+                    + (", and it is called with a deobfuscated argument" if arg_tainted else "")
+                    + "."
+                )
+            else:  # PY_TAINTED_FLOW
+                title = f"Deobfuscated data flows into `{name}`"
+                detail = (
+                    f"A runtime-assembled / deobfuscated value is passed to `{name}`"
+                    f"{scope} — a staged payload a literal-argument scan would miss."
+                )
+            tags = [tag, "taint", "trust-remote-code"]
+            if on_import:
+                tags.append("on-import")
+            out.append(self.finding(rule, sev, title, detail, tags=tags,
+                                    evidence={"name": name, "line": line,
+                                              "on_import": on_import,
+                                              "arg_tainted": arg_tainted}))
+        return out
 
 
 class HFConfigScanner(Scanner):

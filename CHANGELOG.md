@@ -7,6 +7,17 @@ GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
 ### Added
+- **Dataflow/taint analysis of bundled Python source.** A per-scope,
+  intraprocedural taint pass catches trust-remote-code payloads assembled or
+  resolved at runtime that a literal call-name match misses: a dangerous callable
+  **aliased** to a variable then invoked (`sink = os.system; sink(cmd)` — formerly
+  undetected), a callable **dynamically resolved** from a decoded / char-assembled
+  name (`getattr(os, decoded)(...)`), and **deobfuscated data** flowing into a
+  code-execution / os-command / native sink (`exec(b64decode(...))`). New findings
+  `PY_DYNAMIC_CALL` and `PY_TAINTED_FLOW`. Analysis is per-scope (a name in one
+  function can't taint a sibling's) and narrowed to the code-execution surface —
+  verified to fire only twice over a 4,854-file real-Python corpus (both genuine
+  `ctypes.WinDLL` aliases), and the benign model corpus is unaffected.
 - **Detect protocol-0/1 (ASCII) pickles disguised under a structured-binary
   extension.** An ASCII pickle renamed `.onnx`/`.pb`/`.tflite`/`.pte`/`.pdmodel`
   is now confirmed with a `pickletools.genops` trial-parse and scanned as the

@@ -154,6 +154,13 @@ def build(dest: Path) -> list[dict]:
         "source hiding exec behind getattr/__import__ + char-code assembly", True,
         "AST scanner flags getattr/__import__ indirection")
 
+    # ---- resisted: dangerous callable aliased to a variable, then invoked ----
+    (dest / "alias_source.py").write_text(
+        "import os\nsink = os.system\nsink('true')\n")
+    add("alias-callable", dest / "alias_source.py",
+        "os.system aliased to a plain variable then invoked", True,
+        "taint pass follows the alias — a literal name match sees only `sink(...)`")
+
     # ---- resisted: protocol-0 (ASCII) pickle under a structured extension ----
     (dest / "ascii.onnx").write_bytes(pickle.dumps(_OsSystem(), protocol=0))
     add("proto0-spoof-onnx", dest / "ascii.onnx",

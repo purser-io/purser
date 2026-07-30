@@ -116,6 +116,99 @@ def test_syntax_error_flagged():
     assert "PY_UNPARSEABLE" in rules(findings)
 
 
+# -- taint / dataflow (runtime-assembled & aliased payloads) -----------------
+
+def _taint(findings):
+    return {f.rule_id for f in findings} & {"PY_DYNAMIC_CALL", "PY_TAINTED_FLOW"}
+
+
+def test_taint_alias_of_dangerous_callable():
+    # `sink = os.system; sink(...)` — the literal name match sees only an
+    # assignment and a call to `sink`; the taint pass follows the alias.
+    findings = scan_py("import os\nsink = os.system\nsink('id')\n")
+    hit = [f for f in findings if f.rule_id == "PY_DYNAMIC_CALL"]
+    assert hit and hit[0].severity == Severity.CRITICAL
+    assert hit[0].evidence["on_import"] is True
+    assert "taint" in hit[0].tags and "on-import" in hit[0].tags
+
+
+def test_taint_alias_of_alias():
+    findings = scan_py("import os\na = os.system\nb = a\nb('id')\n")
+    assert "PY_DYNAMIC_CALL" in rules(findings)
+
+
+def test_taint_dynamic_getattr_from_assembled_name():
+    # os.system resolved via a char-code-assembled getattr name, then invoked.
+    findings = scan_py(
+        "import os\nname = bytes([115,121,115,116,101,109]).decode()\n"
+        "getattr(os, name)('id')\n")
+    hit = [f for f in findings if f.rule_id == "PY_DYNAMIC_CALL"]
+    assert hit and hit[0].severity == Severity.CRITICAL
+
+
+def test_taint_two_step_dynamic_callable():
+    findings = scan_py(
+        "import os\nn = ''.join(chr(c) for c in (115,121,115,116,101,109))\n"
+        "fn = getattr(os, n)\nfn('id')\n")
+    assert "PY_DYNAMIC_CALL" in rules(findings)
+
+
+def test_taint_deobfuscated_payload_into_exec_inline():
+    findings = scan_py("import base64\nexec(base64.b64decode('cHJpbnQoMSk='))\n")
+    hit = [f for f in findings if f.rule_id == "PY_TAINTED_FLOW"]
+    assert hit and hit[0].severity == Severity.CRITICAL
+
+
+def test_taint_decoded_arg_into_os_system():
+    findings = scan_py(
+        "import base64, os\ncmd = base64.b64decode(BLOB).decode()\nos.system(cmd)\n")
+    hit = [f for f in findings if f.rule_id == "PY_TAINTED_FLOW"]
+    assert hit and hit[0].severity == Severity.CRITICAL
+    assert hit[0].evidence["arg_tainted"] is True
+
+
+def test_taint_flow_inside_function_not_on_import():
+    findings = scan_py("""
+        import os
+        def load(self):
+            sink = os.system
+            sink('id')
+    """)
+    hit = [f for f in findings if f.rule_id == "PY_DYNAMIC_CALL"]
+    assert hit and all(f.evidence["on_import"] is False for f in hit)
+
+
+# -- taint: false-positive guards (benign patterns must stay clean) ----------
+
+def test_taint_benign_dynamic_getattr_not_flagged():
+    # The ubiquitous benign pattern: resolve a layer/activation by a plain name.
+    findings = scan_py("""
+        def build(nn, name, x):
+            act = getattr(nn, name)
+            return act(x)
+    """)
+    assert not _taint(findings)
+
+
+def test_taint_benign_decode_into_non_sink():
+    findings = scan_py("import base64\nw = base64.b64decode(BLOB)\nmodel.load(w)\n")
+    assert not _taint(findings)
+
+
+def test_taint_benign_alias_of_safe_callable():
+    findings = scan_py("fn = self.forward\nfn(x)\n")
+    assert not _taint(findings)
+
+
+def test_taint_benign_string_concat_and_bytes_construction():
+    findings = scan_py("""
+        p = 'models/' + 'weights.bin'
+        header = bytes([0, 0, 0, 1])
+        open(p, 'rb').write(header)
+    """)
+    assert not _taint(findings)
+
+
 # -- HF config auto_map ------------------------------------------------------
 
 def test_auto_map_via_scan(tmp_path: Path):
