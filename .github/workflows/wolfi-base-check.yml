@@ -190,6 +190,10 @@ jobs:
               state: "open", labels: "wolfi-base",
             });
             for (const issue of open.data) {
+              // listForRepo returns PRs too (a PR is an issue in the API); the
+              // refresh PR carries the `wolfi-base` label, so skip PRs or we'd
+              // close our own PR.
+              if (issue.pull_request) continue;
               await github.rest.issues.createComment({
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: issue.number, body: reason,
@@ -223,14 +227,14 @@ jobs:
               "`Dockerfile`, `Dockerfile.hf`, and `Dockerfile.deep` to the live " +
               "digest (`make base-digest` prints it), then rebuild.",
             ].join("\n");
-            const existing = await github.rest.issues.listForRepo({
+            const existing = (await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
               state: "open", labels: "wolfi-base",
-            });
-            if (existing.data.length) {
+            })).data.filter(i => !i.pull_request);   // exclude the refresh PR
+            if (existing.length) {
               await github.rest.issues.update({
                 owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: existing.data[0].number, body,
+                issue_number: existing[0].number, body,
               });
             } else {
               await github.rest.issues.create({
