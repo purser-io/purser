@@ -27,9 +27,41 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
      is prepared ([`docs/openssf-best-practices.md`](docs/openssf-best-practices.md));
      every MUST is met (two justified N/A). Remaining: the owner self-certifies at
      bestpractices.dev and drops the badge into the README (no code gap).
-   - **CNCF Landscape entry** — prepared ([`docs/cncf-landscape-entry.md`](docs/cncf-landscape-entry.md))
-     but **deferred**: the landscape's inclusion bar (traction ≈ ≥300 stars, plus a
-     backing org/Crunchbase) isn't met yet. Submit once adoption grows.
+   - **CNCF project hosting (Sandbox → Incubating → Graduated)** — a far bigger and
+     *different* track than the Landscape catalog below, and **not pursued yet**.
+     Honest re-evaluation against the CNCF TOC criteria (`github.com/cncf/toc`):
+     - **Already met:** Apache-2.0 license; a Contributor Covenant CoC; a public
+       `SECURITY.md` disclosure process; and a genuine cloud-native surface (Helm
+       chart, a `ValidatingAdmissionWebhook`, digest-pinned OCI images, Prometheus
+       metrics) that plausibly fits the **Security** and emerging **AI** TAGs.
+     - **Sandbox (entry level):** the most plausible near-term target. **IP
+       neutrality is no longer a blocker** — acceptance requires donating the
+       trademark/logo/domain to the Linux Foundation, and the brand is
+       **unencumbered** (nothing filed; no org, product, or investment beyond these
+       repos) and the maintainer is **willing to donate it**, so the transfer is
+       clean. Sandbox has no hard traction bar. Remaining work is modest: (1)
+       **governance docs** — now **shipped** (`GOVERNANCE.md`, `MAINTAINERS.md`,
+       `OWNERS`, `ADOPTERS.md`); (2) a crisp **cloud-native fit** framing
+       for the Security / AI TAG; (3) the practical reality that the TOC favors some
+       **momentum and ideally >1 maintainer** — a brand-new solo project may be told
+       it is *early*, but it is no longer *strategically* blocked.
+     - **Incubating:** out of reach — needs **≥3 independent end-user adopters in
+       production** and a healthy **multi-org** committer base with sustained
+       releases. Purser is single-digit-stars and single-maintainer.
+     - **Graduated:** far off — committers from **≥2 orgs**, broad public production
+       adoption, a **third-party security audit**, the **OpenSSF Best Practices
+       passing badge** (already prepared above — the one graduation gate we can
+       knock out early), and a TOC supermajority vote.
+     - **Recommendation:** with the brand-donation question resolved (open to
+       donating — the reserved-brand note in `TRADEMARKS.md` / market research is a
+       *default*, not a constraint), **Sandbox is a real near-term goal.** Concrete
+       path: governance docs now ship; earn the OpenSSF badge, then land a second
+       maintainer + a couple of named
+       adopters to clear the TOC's single-vendor / early-stage bar, and apply.
+   - **CNCF Landscape entry** (the *catalog* — not project hosting) — prepared
+     ([`docs/cncf-landscape-entry.md`](docs/cncf-landscape-entry.md)) but deferred:
+     its lighter bar (traction ≈ ≥300 stars + a backing org/Crunchbase) isn't met
+     yet, and it's independent of the hosting track above.
 
 *(Real-world validation + published benchmark — formerly #1 — is now complete:
 the Phase-1 known-answer harness, Phase-2 peer comparison (`compare.py`), Phase-3

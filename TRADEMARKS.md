@@ -15,6 +15,15 @@ used.
 filing are pending — see [`BRAND.md`](BRAND.md). Treat "Purser" as an
 unregistered/common-law mark, i.e. "Purser™", until further notice.)*
 
+## Stewardship
+The marks are held by the Purser maintainers under the `purser-io` organization.
+The reservation above is a **default, not a permanent commitment**: the
+maintainers are open to transferring the project — including the marks, logo, and
+domain — to a **neutral open-source foundation** (e.g. the Linux Foundation /
+CNCF) if that serves the project's long-term health. Any such transfer is a
+maintainer decision made in the open (see [`GOVERNANCE.md`](GOVERNANCE.md) §10),
+and formal trademark registration may be deferred in favor of that path.
+
 ## What you may do (no permission needed)
 - Use the code under Apache-2.0.
 - Use the name **nominatively** — to truthfully refer to this project (e.g.

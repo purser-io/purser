@@ -6,9 +6,11 @@ market/name research in mind (steer clear of the crowded
 **Kubernetes** and **GitLab** world the tool lives in.
 
 > This is the working brand and it **has been applied to the codebase** — the
-> package, CLI, images, and env vars are now `purser` / `PURSER_*`. **Legal
-> clearance is still pending** (see *Owning the name*); do not publish to PyPI /
-> a public registry or launch publicly until the trademark search clears.
+> package, CLI, images, and env vars are now `purser` / `PURSER_*`, and the
+> project is **already public** (PyPI, GHCR, public repo). Formal trademark
+> clearance/registration was never completed and is now **optional**: the
+> maintainer is open to donating the marks to a neutral foundation — see *Owning
+> the name* and [`GOVERNANCE.md`](GOVERNANCE.md) §10.
 
 ---
 
@@ -146,6 +148,13 @@ Calm, plain, confident — an officer who clears your cargo, not an alarm.
 ---
 
 ## Owning the name (clearance & namespace plan)
+
+> **Update (2026-07-30):** this own-the-mark plan is a **default, not the chosen
+> path**. The maintainer is open to **donating** Purser to a neutral foundation
+> (Linux Foundation / CNCF), in which case the foundation holds the marks and
+> **Phases 2–3 (registration) become unnecessary**. Phase 0 (namespaces — done)
+> and a light Phase 1 search to avoid infringing *others* still apply. See
+> [`GOVERNANCE.md`](GOVERNANCE.md) §10 and `ROADMAP.md` (Foundation readiness).
 
 "Owning" Purser means three things at once: a **trademark** in our class,
 **control of the namespaces**, and **brand governance** so the open-source
