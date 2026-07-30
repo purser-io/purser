@@ -150,6 +150,12 @@ jobs:
         if: steps.check.outputs.drift == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
+          # Fine-grained PAT / App token (Contents + Pull requests: write) so the
+          # bot can open the PR — the default GITHUB_TOKEN is blocked from
+          # creating PRs on this repo, and a PAT-authored PR also triggers ci.yml.
+          # Falls back to GITHUB_TOKEN if the secret isn't set yet (push works;
+          # PR creation will fail visibly rather than silently).
+          token: ${{ secrets.GH_PR_TOKEN || github.token }}
           branch: wolfi-base-refresh
           delete-branch: true
           add-paths: |
