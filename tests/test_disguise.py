@@ -27,6 +27,29 @@ def test_pickle_disguised_as_structured_ext_routes_to_pickle(tmp_path):
         assert detect_format(_evil(tmp_path / name)) is ModelFormat.PICKLE, name
 
 
+def test_proto0_ascii_pickle_disguised_as_onnx_routes_to_pickle(tmp_path):
+    # A *protocol-0* (ASCII) pickle has no proto-2 magic, but under a structured
+    # extension a genops trial-parse still unmasks it — and it keeps its teeth.
+    p = tmp_path / "ascii.onnx"
+    p.write_bytes(pickle.dumps(EvilOsSystem(), protocol=0))
+    assert detect_format(p) is ModelFormat.PICKLE
+    _, findings = scan_file(p)
+    assert any(
+        f.rule_id == "PICKLE_DANGEROUS_IMPORT" and f.severity >= Severity.HIGH
+        for f in findings
+    )
+
+
+def test_real_protobuf_onnx_not_misrouted_to_pickle(tmp_path):
+    # FP guard: a genuine protobuf model (ONNX/TF begin with field tags
+    # 0x08/0x0a) must stay its own format, never be trial-parsed as a pickle.
+    for name in ("real.onnx", "graph.pb"):
+        p = tmp_path / name
+        p.write_bytes(b"\x08\x07\x12\x0cpytorch-jit\x1a\x02" + b"\x00" * 64)
+        fmt = detect_format(p)
+        assert fmt is not ModelFormat.PICKLE, f"{name} -> {fmt}"
+
+
 def test_disguised_pickle_still_flags_dangerous_import(tmp_path):
     _, findings = scan_file(_evil(tmp_path / "embeddings.onnx"))
     assert any(

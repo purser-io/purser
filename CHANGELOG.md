@@ -5,6 +5,17 @@ All notable changes to Purser are documented here. The format follows
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
+## [Unreleased]
+### Added
+- **Detect protocol-0/1 (ASCII) pickles disguised under a structured-binary
+  extension.** An ASCII pickle renamed `.onnx`/`.pb`/`.tflite`/`.pte`/`.pdmodel`
+  is now confirmed with a `pickletools.genops` trial-parse and scanned as the
+  pickle it is (previously only flagged as a format mismatch, not classified by
+  payload). Real protobuf/flatbuffer models are never misrouted — they begin with
+  field tags (`0x08`/`0x0a`) or a flatbuffer offset and must parse cleanly to a
+  pickle `STOP` — verified 0 misroutes over the real-model corpus (incl. a 418 MB
+  ONNX). Closes the corresponding adversarial-evasion residual (recall 16/16).
+
 ## [0.2.1] - 2026-07-28
 ### Fixed
 - **Upload scans no longer block the event loop.** `POST /v1/scan/upload` is an

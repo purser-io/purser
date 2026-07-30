@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import json
+import pickletools
 import struct
 import zipfile
 from pathlib import Path
@@ -74,6 +75,12 @@ NUMPY_MAGIC = b"\x93NUMPY"
 ZIP_MAGIC = b"PK\x03\x04"
 TFLITE_ID = b"TFL3"  # flatbuffer identifier at offset 4
 
+# Extensions whose real formats carry distinctive binary magic (protobuf field
+# tags 0x08/0x0a, or a flatbuffer offset) and therefore can never legitimately
+# be an ASCII pickle. A protocol-0/1 pickle disguised under one of these is a
+# spoof — see the ASCII-pickle override in `detect_format`.
+STRUCTURED_MAGIC_EXTS = {".onnx", ".pb", ".tflite", ".pte", ".pdmodel"}
+
 
 def _looks_like_pickle(head: bytes) -> bool:
     if not head:
@@ -83,6 +90,30 @@ def _looks_like_pickle(head: bytes) -> bool:
         return True
     # Protocol 0/1 commonly starts with (, ], }, c (GLOBAL), etc.
     return head[:1] in (b"(", b"]", b"}", b"c", b"\x8c", b")")
+
+
+def _parses_as_pickle(path: Path, *, max_bytes: int = 4_000_000) -> bool:
+    """Trial-parse the whole file as a pickle opcode stream. True only if it
+    parses cleanly to a terminal STOP — used to confirm a protocol-0/1 (ASCII)
+    pickle disguised under a structured-binary extension without ever misrouting
+    a real protobuf/flatbuffer (which fails `genops` immediately). Never
+    unpickles: `pickletools.genops` only walks opcodes. Size-capped since a
+    disguised payload is small and `genops` walks the buffer."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return False
+    if not data or len(data) > max_bytes:
+        return False
+    ops = 0
+    try:
+        for opcode, _arg, _pos in pickletools.genops(data):
+            ops += 1
+            if opcode.name == "STOP":
+                return ops >= 2          # at least one real op before STOP
+    except Exception:
+        return False
+    return False
 
 
 def _looks_like_safetensors(head: bytes) -> bool:
@@ -198,6 +229,14 @@ def detect_format(path: Path) -> ModelFormat:
     if (_is_strong_pickle(head) and suffix != ".safetensors"
             and not _looks_like_safetensors(head)):
         return ModelFormat.JOBLIB if suffix == ".joblib" else ModelFormat.PICKLE
+    # A protocol-0/1 (ASCII) pickle has no distinctive magic like a proto-2+
+    # one, so a strong-pickle check can't catch it. But under a structured-binary
+    # extension it's still a spoof: real ONNX/TF/TFLite/… begin with protobuf
+    # tags or a flatbuffer offset, never a pickle opcode. Gate the override on a
+    # genops trial parse so a real structured file is never misrouted.
+    if (suffix in STRUCTURED_MAGIC_EXTS and _looks_like_pickle(head)
+            and _parses_as_pickle(path)):
+        return ModelFormat.PICKLE
     if suffix == ".safetensors":
         # Route by extension even when the header looks wrong — the
         # safetensors scanner reports the malformation.

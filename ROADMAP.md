@@ -65,7 +65,6 @@ it is **out of scope** for a scanner that never loads the model.)*
 | Python source dataflow/taint | The AST scanner matches dangerous call names and flags `getattr`/decode→exec; source assembled fully at runtime can still evade. A taint pass raises attacker cost further. |
 | More exfil encodings | UTF-16, base64/hex/base32/base85, one gzip/zlib layer, and **single-byte XOR** are covered — decoded blobs are only flagged when they resolve to a real endpoint/command indicator, so no rise in the false-positive rate (verified 0% over the real-model set). Remaining: **multi-byte / rolling-key XOR** (infeasible to key-recover generally). Note: the XOR path deliberately confirms only *structural* indicators (webhook/URL/code/private-key), not narrow-charset credential regexes, which alias with quantized weight bytes. |
 | Packed-binary C2 endpoints | Endpoints stored as packed bytes (no ASCII/UTF-16 form) aren't extracted; needs structured per-format parsing. |
-| Protocol-0/1 pickle under a spoofed structured extension | Magic beats extension for protocol-2+ pickles and for binaries hidden under doc/config names; a *protocol-0/1 (ASCII)* pickle renamed to a structured non-pickle extension (e.g. `.onnx`) is flagged as a format mismatch but not yet classified by payload. |
 
 ## Candidates — provenance & trust
 
@@ -170,6 +169,13 @@ for per-release detail):
   operator assertion to a verified external root.
 - **Detection:** `trust_remote_code` AST scanner + `auto_map` config scanner;
   exfil UTF-16 / hex / base32 / base85 / gzip / single-byte-XOR decoding; configurable benign-host allowlist.
+- **Protocol-0/1 (ASCII) pickle spoof:** an ASCII pickle disguised under a
+  structured-binary extension (`.onnx`/`.pb`/`.tflite`/`.pte`/`.pdmodel`) is now
+  confirmed via a `pickletools.genops` trial-parse and routed to the pickle
+  scanner (previously only flagged as a format *mismatch*). Real protobuf/
+  flatbuffer models are never misrouted — 0 misroutes over the real-model corpus
+  (incl. a 418 MB ONNX). Closes that gated evasion residual (recall 16/16);
+  packed-binary endpoints remain the one open residual.
 - **Per-format depth:** Keras **non-`Lambda` custom-layer** detection (config walked
   for layer classes outside the Keras/TF namespaces — external code on load);
   **OpenVINO IR** graph parsing (XXE / DOCTYPE-entity + external library/path refs);

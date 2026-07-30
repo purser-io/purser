@@ -11,8 +11,7 @@ pickle, etc.
 Every sample is tagged `resisted` (Purser claims to defeat this technique) or
 not. Evasion **recall over the resisted set must stay 100%** — a miss there is a
 regression and fails the gate. The non-resisted samples are *known* residuals
-from `ROADMAP.md` (packed-binary C2 endpoints and a protocol-0 ASCII pickle
-under a structured extension); they are reported honestly as "evaded" so the
+from `ROADMAP.md` (packed-binary C2 endpoints); they are reported honestly as "evaded" so the
 frontier is visible and measured, not hidden.
 
     python benchmarks/evasion.py                 # report
@@ -155,16 +154,17 @@ def build(dest: Path) -> list[dict]:
         "source hiding exec behind getattr/__import__ + char-code assembly", True,
         "AST scanner flags getattr/__import__ indirection")
 
+    # ---- resisted: protocol-0 (ASCII) pickle under a structured extension ----
+    (dest / "ascii.onnx").write_bytes(pickle.dumps(_OsSystem(), protocol=0))
+    add("proto0-spoof-onnx", dest / "ascii.onnx",
+        "protocol-0 (ASCII) pickle under a .onnx extension", True,
+        "genops trial-parse routes it to the pickle scanner (real ONNX/pb start 0x08/0x0a)")
+
     # ================= known-open residuals (ROADMAP; not gated) =================
     (dest / "packed.bin").write_bytes(
         b"WGHT" + b"\x00" * 8 + struct.pack(">4sH", bytes([203, 0, 113, 7]), 4444))
     add("packed-endpoint", dest / "packed.bin", "C2 IP:port packed as raw bytes (no ASCII/UTF-16)", False,
         "packed-binary endpoints aren't extracted (ROADMAP)")
-    # protocol-0 (ASCII) pickle under a structured extension
-    (dest / "ascii.onnx").write_bytes(pickle.dumps(_OsSystem(), protocol=0))
-    add("proto0-spoof-onnx", dest / "ascii.onnx",
-        "protocol-0 (ASCII) pickle under a .onnx extension", False,
-        "ASCII pickle under a structured ext is flagged as a mismatch, not classified by payload (ROADMAP)")
     return entries
 
 

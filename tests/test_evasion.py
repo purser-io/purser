@@ -41,4 +41,7 @@ def test_known_open_residuals_are_labeled(tmp_path):
     # stays measured; they are not asserted detected (that's the point).
     entries = evasion.build(tmp_path)
     open_ids = {e["id"] for e in entries if not e["resisted"]}
-    assert {"packed-endpoint", "proto0-spoof-onnx"} <= open_ids
+    resisted_ids = {e["id"] for e in entries if e["resisted"]}
+    assert "packed-endpoint" in open_ids
+    # proto0-spoof-onnx graduated from residual to resisted (ASCII-pickle routing)
+    assert "proto0-spoof-onnx" in resisted_ids
