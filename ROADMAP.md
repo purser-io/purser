@@ -136,7 +136,9 @@ for per-release detail):
   license gates, Helm lint, image builds + Trivy) and a tag-driven release
   pipeline; **PyPI** publishing via OIDC Trusted Publishing; public multi-arch
   **signed** container images (core / HF / deep) and a **signed** Helm chart on
-  GHCR (OCI); CodeQL + dependency-review; `CHANGELOG.md`; a `demo/` sandbox.
+  GHCR (OCI); CodeQL + **dependency-review** (now active — the repo's Dependency
+  Graph + Dependabot alerts are enabled, so PRs are gated on new-dependency CVEs
+  and copyleft licenses); `CHANGELOG.md`; a `demo/` sandbox.
 - **Community & governance:** `CONTRIBUTING.md`, a Contributor Covenant Code of
   Conduct, bug/feature issue forms + a PR template, an **enforced DCO** sign-off
   check, `CITATION.cff`, a `py.typed` marker, and package `[project.urls]`.
@@ -154,8 +156,13 @@ for per-release detail):
   stale base digest and **auto-refreshes** — bumps the pin in all three
   Dockerfiles, rebuilds each image, runs Trivy (HIGH/CRITICAL, fixed-only — the CI
   gate) on the new base, and opens a **PR** with the per-image result (falling back
-  to an issue only if the run itself errors). Supersedes the earlier detect-and-
-  open-an-issue job; manual `make base-digest` still prints the live digest.
+  to an issue only if the run itself errors). The PR is opened with a scoped
+  `GH_PR_TOKEN` secret and DCO-signed (`signoff`), so it passes checks and triggers
+  CI; the drift issue is auto-closed on resolution. Supersedes the earlier detect-
+  and-open-an-issue job; manual `make base-digest` still prints the live digest.
+  **Setup dependency:** requires a repo secret `GH_PR_TOKEN` (fine-grained PAT /
+  App, Contents + Pull requests: write) — the default `GITHUB_TOKEN` cannot create
+  PRs on this repo.
 - **Provenance:** Ed25519 model signing + trust store, `require_signed` policy,
   and key **revocation / validity windows**; **Sigstore (Fulcio/Rekor) verified
   identity** — offline bundle verification against a vendored trust root, with an
