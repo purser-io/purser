@@ -51,7 +51,7 @@ passing requirement's floor, noted for transparency).
 |---|---|---|
 | Working build (from source) | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles |
 | Common, FLOSS build tools | Met | `uv` / `pip`, `hatchling`, `helm`, `docker` |
-| Automated test suite | Met | 250 tests in `tests/` |
+| Automated test suite | Met | 264 tests in `tests/` |
 | Test-invocation documented | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test` |
 | Tests cover the majority of the code | Met | unit + API + adversarial/evasion fixtures across scanners/policy/signing |
 | Continuous integration | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix, lint, tests, helm, image build + Trivy) |

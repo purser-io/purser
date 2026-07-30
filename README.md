@@ -10,7 +10,7 @@
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 
@@ -122,7 +122,7 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 | MLflow | `MLmodel` dir | `python_function` flavor `loader_module`/bundled `code/` (arbitrary code on load) |
 | Caffe | `.prototxt` `.caffemodel` | `type: "Python"` (PythonLayer) runs arbitrary Python at inference |
 | PMML | `.pmml` | XXE entity declarations, Extension elements with script content |
-| Bundled Python | `*.py` (`modeling_*.py`, …) | **AST analysis of `trust_remote_code` source** — exec/eval, os/subprocess, sockets & HTTP clients, dynamic import, native code, marshal/pickle, base64/hex deobfuscation, `os.environ` harvesting; module-scope calls escalated (run on import) |
+| Bundled Python | `*.py` (`modeling_*.py`, …) | **AST analysis of `trust_remote_code` source** — exec/eval, os/subprocess, sockets & HTTP clients, dynamic import, native code, marshal/pickle, base64/hex deobfuscation, `os.environ` harvesting; module-scope calls escalated (run on import). **Dataflow/taint** additionally catches payloads assembled at runtime — a dangerous callable aliased to a variable then invoked, or resolved from a decoded/char-assembled name, and deobfuscated data reaching an exec/os sink |
 | HF config | `config.json`, `*_config.json` | `auto_map` / `custom_pipelines` / `trust_remote_code` keys that arm remote-code execution, linked to the referenced source files |
 | NumPy | `.npy` `.npz` | Object-dtype arrays (embedded pickles) — payload scanned recursively |
 | Archives | `.zip` `.tar` `.gz` | Zip-slip path traversal, zip bombs, recursive member scanning (depth-capped) |
