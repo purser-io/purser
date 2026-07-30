@@ -11,7 +11,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(250 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(264 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -171,7 +171,8 @@ for per-release detail):
   and copyleft licenses); `CHANGELOG.md`; a `demo/` sandbox.
 - **Community & governance:** `CONTRIBUTING.md`, a Contributor Covenant Code of
   Conduct, bug/feature issue forms + a PR template, an **enforced DCO** sign-off
-  check, `CITATION.cff`, a `py.typed` marker, and package `[project.urls]`.
+  check, `CITATION.cff`, a `py.typed` marker, package `[project.urls]`, and full
+  governance docs (`GOVERNANCE.md`, `MAINTAINERS.md`, `OWNERS`, `ADOPTERS.md`).
 - **Deploy-time enforcement:** a composite GitHub Action (`action.yml`) gates a
   CI job on the policy verdict, **and** a Kubernetes `ValidatingAdmissionWebhook`
   (`purser.admission`, Helm `admission.enabled`) enforces image-digest pinning +
