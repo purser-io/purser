@@ -1,0 +1,9 @@
+# Machine-readable ownership for Purser (Prow/OWNERS convention).
+#   approvers — may give binding approval to merge (the maintainers)
+#   reviewers — may formally review/approve changes in the repo
+# Roles, criteria, and the add/remove process are defined in GOVERNANCE.md;
+# the human-readable roster with affiliations is in MAINTAINERS.md.
+approvers:
+  - pallj011
+reviewers:
+  - pallj011
