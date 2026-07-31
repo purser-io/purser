@@ -47,5 +47,5 @@ owners and are used for identification and comparison only — no affiliation or
 endorsement is implied.
 
 ## Questions
-Requests to use the marks beyond the above: contact the maintainers (configure a
-brand/contact address before publishing).
+Requests to use the marks beyond the above: open a GitHub issue or email
+**security@purser-io.io**.

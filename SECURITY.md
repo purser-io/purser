@@ -15,9 +15,8 @@ _Last reviewed: 2026-07-19 · applies to Purser 0.1.x._
 **Do not open a public issue for security bugs.** Report privately:
 
 - Preferred: a **GitHub private security advisory** (Security → *Report a
-  vulnerability*) once the repository is published.
-- Otherwise: email the maintainer's designated security contact (configure a
-  `security@…` alias before publishing — do not rely on a personal address).
+  vulnerability*).
+- Otherwise: email **security@purser-io.io** (monitored security alias).
 
 Please include: affected version/commit, a minimal reproducer (for a scanner
 **bypass**, the crafted model file — inert payloads only), impact, and any fix
