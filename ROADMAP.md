@@ -23,10 +23,10 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 1. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
    Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`).
-   - **OpenSSF Best Practices badge** — a full **passing**-criteria self-assessment
-     is prepared ([`docs/openssf-best-practices.md`](docs/openssf-best-practices.md));
-     every MUST is met (two justified N/A). Remaining: the owner self-certifies at
-     bestpractices.dev and drops the badge into the README (no code gap).
+   - **OpenSSF Best Practices badge — EARNED (passing).** Project
+     [13900](https://www.bestpractices.dev/projects/13900) is at **100% / passing**;
+     the badge is live in the README. Backed by the full self-assessment +
+     submission sheet ([`docs/openssf-best-practices.md`](docs/openssf-best-practices.md)).
    - **CNCF project hosting (Sandbox → Incubating → Graduated)** — a far bigger and
      *different* track than the Landscape catalog below, and **not pursued yet**.
      Honest re-evaluation against the CNCF TOC criteria (`github.com/cncf/toc`):
@@ -50,13 +50,13 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
        releases. Purser is single-digit-stars and single-maintainer.
      - **Graduated:** far off — committers from **≥2 orgs**, broad public production
        adoption, a **third-party security audit**, the **OpenSSF Best Practices
-       passing badge** (already prepared above — the one graduation gate we can
-       knock out early), and a TOC supermajority vote.
+       passing badge** (already **earned** — project 13900), and a TOC
+       supermajority vote.
      - **Recommendation:** with the brand-donation question resolved (open to
        donating — the reserved-brand note in `TRADEMARKS.md` / market research is a
        *default*, not a constraint), **Sandbox is a real near-term goal.** Concrete
-       path: governance docs now ship; earn the OpenSSF badge, then land a second
-       maintainer + a couple of named
+       path: governance docs ship and the OpenSSF badge is earned — remaining is
+       to land a second maintainer + a couple of named
        adopters to clear the TOC's single-vendor / early-stage bar, and apply.
    - **CNCF Landscape entry** (the *catalog* — not project hosting) — prepared
      ([`docs/cncf-landscape-entry.md`](docs/cncf-landscape-entry.md)) but deferred:
