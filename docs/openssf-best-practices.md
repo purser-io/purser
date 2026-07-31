@@ -197,11 +197,18 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 
 ## Submitting (project owner)
 
-1. Sign in at https://www.bestpractices.dev/ with the `purser-io` GitHub account.
-2. "Add project" → repo URL `https://github.com/purser-io/purser`.
-3. Answer each criterion using the table above (URLs point at the evidence).
-4. On completion you receive a project **ID**; add the badge to `README.md`:
+**Registered — project ID 13900:** https://www.bestpractices.dev/projects/13900
+(currently **94%**; **passing** once the last criteria are marked). The README
+badge is live and auto-updates:
 
-   ```markdown
-   [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<ID>/badge)](https://www.bestpractices.dev/projects/<ID>)
-   ```
+```markdown
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
+```
+
+To reach 100% / passing:
+1. Mark any still-unanswered criteria using the **Submission sheet** above —
+   every MUST is Met, with two justified N/A (`crypto_pfs`,
+   `crypto_password_storage`).
+2. **Fix the homepage URL** in the project settings: it currently reads
+   `https://puser-io.io` (typo) — set it to **`https://purser-io.io`** so the
+   homepage / `sites_https` criterion passes.

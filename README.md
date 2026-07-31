@@ -13,10 +13,7 @@
 &nbsp;![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
-<!-- OpenSSF Best Practices — after registering the project at bestpractices.dev,
-     replace <ID> and uncomment (it renders a live passing badge):
-&nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<ID>/badge)](https://www.bestpractices.dev/projects/<ID>)
--->
+&nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
 
 </div>
 
