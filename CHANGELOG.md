@@ -24,13 +24,15 @@ GitHub notes are generated automatically; this file is the curated summary.
   `PURSER_SIGNAL_TIMEOUT_SECONDS` (default 10).
 - **HuggingFace upstream scan-verdict ingestion** (signal source
   `hf-verdicts`). Scans on the `-hf` path (`hf://` targets,
-  `POST /v1/scan/huggingface`) also read the Hub's per-file
-  `securityFileStatus` verdicts — inheriting its picklescan / ClamAV /
-  Protect AI / JFrog scans — and surface upstream `unsafe` / `suspicious` as
-  corroborating `HF_UPSTREAM_UNSAFE` (HIGH) / `HF_UPSTREAM_SUSPICIOUS`
-  (MEDIUM) findings. An upstream `safe` verdict never downgrades Purser's own
-  analysis, and plain local scans remain fully offline (regression-tested).
-  Honors `HF_ENDPOINT` and `HF_TOKEN`; follows tree-API pagination.
+  `POST /v1/scan/huggingface`) also read the Hub's own scan results
+  (`securityRepoStatus` via `?securityStatus=true`, per-scanner detail via
+  `paths-info` — verified against the live API) — inheriting its picklescan /
+  ClamAV / Protect AI / JFrog / VirusTotal scans — and surface upstream
+  `unsafe` / `caution` as corroborating `HF_UPSTREAM_UNSAFE` (HIGH) /
+  `HF_UPSTREAM_SUSPICIOUS` (MEDIUM) findings, with the flagging scanners
+  recorded as evidence. An upstream `safe` verdict never downgrades Purser's
+  own analysis, and plain local scans remain fully offline
+  (regression-tested). Honors `HF_ENDPOINT` and `HF_TOKEN`.
 - **Dataflow/taint analysis of bundled Python source.** A per-scope,
   intraprocedural taint pass catches trust-remote-code payloads assembled or
   resolved at runtime that a literal call-name match misses: a dangerous callable

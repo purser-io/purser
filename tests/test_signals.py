@@ -2,16 +2,19 @@
 upstream scan-verdict source.
 
 Network is always mocked: the suite monkeypatches `urllib.request.urlopen`
-inside `purser.signals.hf_verdicts`.
+inside `purser.signals.hf_verdicts`. The mocked payload shapes mirror the
+live Hub API (verified 2026-08-02): `securityRepoStatus.filesWithIssues`
+on `GET /api/models/{repo}?securityStatus=true`, and per-scanner
+`securityFileStatus` blobs on `POST .../paths-info/{rev}`.
 """
 
 from __future__ import annotations
 
 import json
 import pickle
+import struct
 import urllib.error
 from pathlib import Path
-
 
 from purser.core.findings import Severity, Verdict
 from purser.core.scanner import scan_target
@@ -31,9 +34,8 @@ def rules(fs):
 
 
 class FakeResponse:
-    def __init__(self, body, link: str = ""):
+    def __init__(self, body):
         self._body = json.dumps(body).encode()
-        self.headers = {"Link": link}
 
     def read(self):
         return self._body
@@ -45,34 +47,36 @@ class FakeResponse:
         return False
 
 
-def tree_item(path: str, sec: dict | None):
-    item = {"type": "file", "path": path, "size": 10, "oid": "abc"}
-    if sec is not None:
-        item["securityFileStatus"] = sec
-    return item
-
-
-def patch_hub(monkeypatch, pages: list[list[dict]]):
-    """Serve `pages` in order; Link header chains all but the last."""
+def patch_hub(monkeypatch, repo_status: dict, paths_info: list | None = None):
+    """Serve the repo-level securityStatus body and (optionally) paths-info."""
     calls = []
 
     def fake_urlopen(req, timeout=0):
-        calls.append(req.full_url)
-        i = len(calls) - 1
-        link = ('<https://huggingface.co/next-page>; rel="next"'
-                if i < len(pages) - 1 else "")
-        return FakeResponse(pages[min(i, len(pages) - 1)], link=link)
+        calls.append(req)
+        if "/paths-info/" in req.full_url:
+            return FakeResponse(paths_info if paths_info is not None else [])
+        return FakeResponse({"securityRepoStatus": repo_status})
 
     monkeypatch.setattr("purser.signals.hf_verdicts.urllib.request.urlopen",
                         fake_urlopen)
     return calls
 
 
+def issue(path: str, level: str) -> dict:
+    return {"path": path, "level": level}
+
+
 HF_CTX = SignalContext(repo_id="evil-org/bad-model", revision="deadbeef",
                        source="huggingface")
 
 
-# -- status-blob walking ------------------------------------------------------
+def write_safetensors(tmp_path: Path) -> None:
+    header = b'{"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}'
+    (tmp_path / "weights.safetensors").write_bytes(
+        struct.pack("<Q", len(header)) + header + b"\x00" * 4)
+
+
+# -- status-blob walking (paths-info detail) -----------------------------------
 
 def test_statuses_walks_nested_scanner_reports():
     blob = {
@@ -88,13 +92,13 @@ def test_statuses_walks_nested_scanner_reports():
     assert got["scans[0].securityStatus"] == "suspicious"
 
 
-# -- the HF verdicts source ---------------------------------------------------
+# -- the HF verdicts source ----------------------------------------------------
 
 def test_hf_unsafe_verdict_becomes_high_finding(monkeypatch):
-    patch_hub(monkeypatch, [[
-        tree_item("model.bin", {"status": "unsafe"}),
-        tree_item("clean.safetensors", {"status": "safe"}),
-    ]])
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue("model.bin", "unsafe")],
+    })
     fs = HFVerdictsSource().collect(HF_CTX)
     assert rules(fs) == {"HF_UPSTREAM_UNSAFE"}
     (f,) = fs
@@ -104,44 +108,84 @@ def test_hf_unsafe_verdict_becomes_high_finding(monkeypatch):
     assert f.evidence["revision"] == "deadbeef"
 
 
-def test_hf_suspicious_maps_to_medium(monkeypatch):
-    patch_hub(monkeypatch, [[
-        tree_item("layer.pkl", {"avScan": {"status": "suspicious"}}),
-    ]])
+def test_hf_caution_maps_to_medium(monkeypatch):
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue("build_pickles.py", "caution")],
+    })
     (f,) = HFVerdictsSource().collect(HF_CTX)
     assert f.rule_id == "HF_UPSTREAM_SUSPICIOUS"
     assert f.severity == Severity.MEDIUM
 
 
-def test_hf_safe_and_queued_and_unknown_produce_nothing(monkeypatch):
-    patch_hub(monkeypatch, [[
-        tree_item("a.safetensors", {"status": "safe"}),
-        tree_item("b.bin", {"status": "queued"}),
-        tree_item("c.bin", {"status": "some-future-value"}),
-        tree_item("d.bin", None),
-    ]])
+def test_hf_unknown_level_still_an_issue(monkeypatch):
+    """Anything in filesWithIssues is an issue even if the level is novel."""
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue("x.bin", "some-future-level")],
+    })
+    (f,) = HFVerdictsSource().collect(HF_CTX)
+    assert f.rule_id == "HF_UPSTREAM_SUSPICIOUS"
+    assert f.severity == Severity.MEDIUM
+
+
+def test_hf_clean_repo_produces_nothing(monkeypatch):
+    calls = patch_hub(monkeypatch, {"scansDone": True, "filesWithIssues": []})
     assert HFVerdictsSource().collect(HF_CTX) == []
+    # no issues -> no second (paths-info) request either
+    assert len(calls) == 1
+    assert "securityStatus=true" in calls[0].full_url
+    assert "/revision/deadbeef" in calls[0].full_url
 
 
-def test_hf_worst_status_wins_per_file(monkeypatch):
-    patch_hub(monkeypatch, [[
-        tree_item("x.bin", {"status": "suspicious",
-                            "avScan": {"status": "unsafe"}}),
-    ]])
+def test_hf_scans_not_done_is_visible_gap(monkeypatch):
+    patch_hub(monkeypatch, {"scansDone": False, "filesWithIssues": []})
+    fs = HFVerdictsSource().collect(HF_CTX)
+    assert rules(fs) == {"SIGNAL_UNAVAILABLE"}
+    assert "not finished scanning" in fs[0].detail
+
+
+def test_hf_scanner_detail_recorded_as_evidence(monkeypatch):
+    patch_hub(
+        monkeypatch,
+        {"scansDone": True, "filesWithIssues": [issue("model.bin", "unsafe")]},
+        paths_info=[{
+            "path": "model.bin",
+            "securityFileStatus": {
+                "status": "unsafe",
+                "protectAiScan": {"status": "unsafe", "message": "..."},
+                "avScan": {"status": "safe"},
+                "pickleImportScan": {"status": "unsafe", "version": "0.0.32"},
+            },
+        }])
+    (f,) = HFVerdictsSource().collect(HF_CTX)
+    assert f.evidence["reported_by"] == ["pickleImportScan", "protectAiScan"]
+
+
+def test_hf_paths_info_failure_does_not_lose_the_finding(monkeypatch):
+    def fake_urlopen(req, timeout=0):
+        if "/paths-info/" in req.full_url:
+            raise urllib.error.URLError("boom")
+        return FakeResponse({"securityRepoStatus": {
+            "scansDone": True,
+            "filesWithIssues": [issue("model.bin", "unsafe")],
+        }})
+
+    monkeypatch.setattr("purser.signals.hf_verdicts.urllib.request.urlopen",
+                        fake_urlopen)
     (f,) = HFVerdictsSource().collect(HF_CTX)
     assert f.rule_id == "HF_UPSTREAM_UNSAFE"
-    assert f.evidence["reported_by"] == "avScan.status"
+    assert f.evidence["reported_by"] == []
 
 
-def test_hf_pagination_followed(monkeypatch):
-    calls = patch_hub(monkeypatch, [
-        [tree_item("p1.bin", {"status": "unsafe"})],
-        [tree_item("p2.bin", {"status": "unsafe"})],
-    ])
+def test_hf_flood_of_issues_is_capped(monkeypatch):
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue(f"f{i}.bin", "unsafe") for i in range(80)],
+    })
     fs = HFVerdictsSource().collect(HF_CTX)
-    assert {f.file for f in fs} == {"p1.bin", "p2.bin"}
-    assert len(calls) == 2
-    assert calls[1] == "https://huggingface.co/next-page"
+    assert len(fs) == 51  # 50 individual + 1 truncation summary
+    assert fs[-1].evidence["flagged_total"] == 80
 
 
 def test_hf_network_error_is_coverage_gap_not_crash(monkeypatch):
@@ -153,6 +197,14 @@ def test_hf_network_error_is_coverage_gap_not_crash(monkeypatch):
     assert rules(fs) == {"SIGNAL_UNAVAILABLE"}
     assert fs[0].severity == Severity.LOW
     assert "coverage-gap" in fs[0].tags
+
+
+def test_hf_missing_security_block_is_coverage_gap(monkeypatch):
+    monkeypatch.setattr(
+        "purser.signals.hf_verdicts.urllib.request.urlopen",
+        lambda req, timeout=0: FakeResponse({"id": "repo", "siblings": []}))
+    fs = HFVerdictsSource().collect(HF_CTX)
+    assert rules(fs) == {"SIGNAL_UNAVAILABLE"}
 
 
 def test_hf_available_only_for_hub_scans():
@@ -167,7 +219,8 @@ def test_hf_token_sent_when_set(monkeypatch):
 
     def fake_urlopen(req, timeout=0):
         seen["auth"] = req.get_header("Authorization")
-        return FakeResponse([])
+        return FakeResponse({"securityRepoStatus": {"scansDone": True,
+                                                    "filesWithIssues": []}})
 
     monkeypatch.setattr("purser.signals.hf_verdicts.urllib.request.urlopen",
                         fake_urlopen)
@@ -176,7 +229,7 @@ def test_hf_token_sent_when_set(monkeypatch):
     assert seen["auth"] == "Bearer hf_secret"
 
 
-# -- registry / gates / plugins ----------------------------------------------
+# -- registry / gates / plugins -------------------------------------------------
 
 def test_signals_master_switch(monkeypatch):
     monkeypatch.setenv("PURSER_SIGNALS", "0")
@@ -248,16 +301,15 @@ def test_broken_plugin_is_visible_not_fatal(monkeypatch):
     assert "busted" in fs[0].title
 
 
-# -- end-to-end through scan_target + policy ----------------------------------
+# -- end-to-end through scan_target + policy -------------------------------------
 
 def test_upstream_unsafe_fails_clean_local_scan(monkeypatch, tmp_path):
     """A model whose bytes look clean still FAILs when upstream flags it."""
-    patch_hub(monkeypatch, [[tree_item("weights.safetensors",
-                                       {"status": "unsafe"})]])
-    header = b'{"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}'
-    import struct
-    (tmp_path / "weights.safetensors").write_bytes(
-        struct.pack("<Q", len(header)) + header + b"\x00" * 4)
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue("weights.safetensors", "unsafe")],
+    })
+    write_safetensors(tmp_path)
     report = scan_target(tmp_path, signal_context=HF_CTX)
     assert "HF_UPSTREAM_UNSAFE" in rules(report.signal_findings)
     assert report.verdict == Verdict.FAIL
@@ -265,8 +317,8 @@ def test_upstream_unsafe_fails_clean_local_scan(monkeypatch, tmp_path):
 
 
 def test_upstream_safe_never_downgrades_own_verdict(monkeypatch, tmp_path):
-    """Purser finds malice; upstream says safe; verdict must stay FAIL."""
-    patch_hub(monkeypatch, [[tree_item("model.pkl", {"status": "safe"})]])
+    """Purser finds malice; upstream says all-clean; verdict must stay FAIL."""
+    patch_hub(monkeypatch, {"scansDone": True, "filesWithIssues": []})
     (tmp_path / "model.pkl").write_bytes(pickle.dumps(EvilOsSystem()))
     report = scan_target(tmp_path, signal_context=HF_CTX)
     assert report.signal_findings == []
@@ -285,12 +337,11 @@ def test_local_scan_makes_no_network_calls(monkeypatch, benign_pickle):
 def test_policy_rule_override_applies_to_signal_findings(monkeypatch, tmp_path):
     from purser.core.policy import Policy
 
-    patch_hub(monkeypatch, [[tree_item("weights.safetensors",
-                                       {"status": "unsafe"})]])
-    header = b'{"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}'
-    import struct
-    (tmp_path / "weights.safetensors").write_bytes(
-        struct.pack("<Q", len(header)) + header + b"\x00" * 4)
+    patch_hub(monkeypatch, {
+        "scansDone": True,
+        "filesWithIssues": [issue("weights.safetensors", "unsafe")],
+    })
+    write_safetensors(tmp_path)
     pol_yaml = tmp_path / "pol.yaml"
     pol_yaml.write_text(
         "version: 1\nname: t\nfail_on: {severity: HIGH}\n"

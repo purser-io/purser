@@ -20,7 +20,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(282 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(286 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,

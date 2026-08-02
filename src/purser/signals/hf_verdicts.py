@@ -1,12 +1,22 @@
 """Upstream HuggingFace Hub scan verdicts as a signal source.
 
 The Hub runs several scanners over uploaded files (picklescan, ClamAV,
-Protect AI Guardian, JFrog) and exposes per-file verdicts on the tree API:
+Protect AI Guardian, JFrog, VirusTotal) and exposes the results two ways
+(both verified against the live API):
 
-    GET {hub}/api/models/{repo_id}/tree/{revision}?recursive=true&expand=true
-        -> [{"path": ..., "securityFileStatus": {...}}, ...]
+  GET {hub}/api/models/{repo}[/revision/{rev}]?securityStatus=true
+      -> "securityRepoStatus": {"scansDone": bool,
+                                "filesWithIssues": [{"path", "level"}]}
 
-Ingesting that verdict inherits the Hub's commercial scanners for free and
+  POST {hub}/api/models/{repo}/paths-info/{rev}   {"paths": [...], "expand": true}
+      -> per-file "securityFileStatus" with per-scanner sub-reports
+         (protectAiScan / avScan / pickleImportScan / jFrogScan / ...)
+
+This source uses the repo-level call as the verdict (one request, no
+pagination) and, only when files are flagged, a best-effort paths-info call
+to record *which* upstream scanner flagged them as evidence.
+
+Ingesting these verdicts inherits the Hub's commercial scanners for free and
 turns Purser from a competitor of those scanners into an aggregator of them.
 
 Ground rule (non-negotiable): an upstream **unsafe** verdict is a
@@ -36,15 +46,11 @@ from purser.signals import SignalContext, unavailable_finding
 
 DEFAULT_ENDPOINT = "https://huggingface.co"
 
-# Upstream status vocabulary -> severity. Parsed defensively: the field is not
-# formally documented, so unknown values are ignored rather than guessed at.
+# Observed `level` vocabulary: "unsafe", "caution". Parsed defensively — an
+# unknown level still sits in *filesWithIssues*, so it is an issue by
+# definition and defaults to MEDIUM rather than being dropped.
 _UNSAFE = {"unsafe", "malicious", "dangerous", "blocked"}
-_SUSPICIOUS = {"suspicious", "caution", "warning"}
-# Not security verdicts: scan hasn't happened / didn't finish.
-_NEUTRAL = {"safe", "innocuous", "clean", "ok", "queued", "pending", "none",
-            "unscanned", "error", "skipped"}
 
-_MAX_PAGES = 20          # tree API paginates via Link: rel="next"
 _MAX_FINDINGS = 50       # cap per repo; the rest is summarized
 
 
@@ -56,28 +62,26 @@ def _timeout() -> float:
     return float(env_get("SIGNAL_TIMEOUT_SECONDS", "10") or "10")
 
 
-def _fetch_json(url: str) -> tuple[Any, str | None]:
-    """GET one page. Returns (parsed body, next-page URL or None)."""
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+def _request_json(url: str, payload: dict | None = None) -> Any:
+    headers = {"Accept": "application/json"}
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode()
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers)
     token = os.environ.get("HF_TOKEN", "").strip()
     if token:
         req.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(req, timeout=_timeout()) as resp:  # nosec B310
-        body = json.loads(resp.read().decode())
-        link = resp.headers.get("Link", "")
-    next_url = None
-    for part in link.split(","):
-        if 'rel="next"' in part and "<" in part:
-            next_url = part[part.index("<") + 1:part.index(">")]
-            break
-    return body, next_url
+        return json.loads(resp.read().decode())
 
 
 def _statuses(node: Any) -> list[tuple[str, str]]:
     """Every (key-path, status-string) under a securityFileStatus blob.
 
-    The blob nests per-scanner sub-reports (avScan, pickleImportScan, and
-    whatever the Hub adds next), so walk it rather than hard-coding a schema.
+    The blob nests per-scanner sub-reports (avScan, protectAiScan,
+    pickleImportScan, and whatever the Hub adds next), so walk it rather
+    than hard-coding a schema.
     """
     out: list[tuple[str, str]] = []
 
@@ -105,88 +109,103 @@ class HFVerdictsSource:
     def available(self, ctx: SignalContext) -> bool:
         return ctx.source == "huggingface" and bool(ctx.repo_id)
 
-    def collect(self, ctx: SignalContext) -> list[Finding]:
+    def _flagged_by(self, ctx: SignalContext, paths: list[str]) -> dict[str, list[str]]:
+        """Best-effort detail: which upstream scanners flagged each path."""
         repo = urllib.parse.quote(ctx.repo_id or "", safe="/")
         rev = urllib.parse.quote(ctx.revision or "main", safe="")
-        url = (f"{_hub_endpoint()}/api/models/{repo}/tree/{rev}"
-               "?recursive=true&expand=true")
-        findings: list[Finding] = []
-        flagged = 0
-        pages = 0
         try:
-            while url and pages < _MAX_PAGES:
-                body, url = _fetch_json(url)
-                pages += 1
-                if not isinstance(body, list):
-                    break
-                for item in body:
-                    if not isinstance(item, dict):
-                        continue
-                    fname = str(item.get("path", ""))
-                    sec = item.get("securityFileStatus") or item.get("security")
-                    if not sec:
-                        continue
-                    worst: tuple[Severity, str, str] | None = None
-                    for key_path, status in _statuses(sec):
-                        if status in _UNSAFE:
-                            sev = Severity.HIGH
-                        elif status in _SUSPICIOUS:
-                            sev = Severity.MEDIUM
-                        elif status in _NEUTRAL:
-                            continue
-                        else:
-                            continue  # unknown vocabulary: ignore, never guess
-                        if worst is None or sev > worst[0]:
-                            worst = (sev, status, key_path)
-                    if worst is None:
-                        continue
-                    flagged += 1
-                    if flagged > _MAX_FINDINGS:
-                        continue
-                    sev, status, key_path = worst
-                    rule = ("HF_UPSTREAM_UNSAFE" if sev >= Severity.HIGH
-                            else "HF_UPSTREAM_SUSPICIOUS")
-                    findings.append(Finding(
-                        rule_id=rule,
-                        severity=sev,
-                        title=f"HuggingFace Hub scanners flag `{fname}` as {status}",
-                        detail="Upstream verdict from the Hub's scan pipeline "
-                               "(picklescan / ClamAV / Protect AI / JFrog), "
-                               "corroborating independent analysis. An upstream "
-                               "'safe' is never used to downgrade Purser's own "
-                               "verdict.",
-                        file=fname,
-                        scanner=f"signals.{self.name}",
-                        tags=["upstream-intel"],
-                        evidence={
-                            "repo_id": ctx.repo_id,
-                            "revision": ctx.revision or "main",
-                            "status": status,
-                            "reported_by": key_path,
-                        },
-                    ))
+            info = _request_json(
+                f"{_hub_endpoint()}/api/models/{repo}/paths-info/{rev}",
+                payload={"paths": paths, "expand": True})
+        except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+            return {}
+        out: dict[str, list[str]] = {}
+        if not isinstance(info, list):
+            return out
+        for item in info:
+            if not isinstance(item, dict):
+                continue
+            sec = item.get("securityFileStatus")
+            if not sec:
+                continue
+            scanners = sorted({
+                key_path.split(".")[0]
+                for key_path, status in _statuses(sec)
+                if "." in key_path and status not in ("safe", "innocuous", "queued")
+            })
+            if scanners:
+                out[str(item.get("path", ""))] = scanners
+        return out
+
+    def collect(self, ctx: SignalContext) -> list[Finding]:
+        repo = urllib.parse.quote(ctx.repo_id or "", safe="/")
+        url = f"{_hub_endpoint()}/api/models/{repo}"
+        if ctx.revision:
+            url += f"/revision/{urllib.parse.quote(ctx.revision, safe='')}"
+        url += "?securityStatus=true"
+        try:
+            body = _request_json(url)
         except (urllib.error.URLError, OSError, ValueError,
                 json.JSONDecodeError) as exc:
-            findings.append(unavailable_finding(
+            return [unavailable_finding(
                 self.name,
                 f"could not fetch upstream scan verdicts for "
-                f"{ctx.repo_id}: {exc}"))
-            return findings
-        if flagged > _MAX_FINDINGS:
+                f"{ctx.repo_id}: {exc}")]
+
+        status = (body or {}).get("securityRepoStatus") if isinstance(body, dict) else None
+        if not isinstance(status, dict):
+            return [unavailable_finding(
+                self.name,
+                f"no securityRepoStatus in the Hub's response for {ctx.repo_id}")]
+
+        findings: list[Finding] = []
+        issues = [i for i in status.get("filesWithIssues") or []
+                  if isinstance(i, dict)]
+        detail_by_path = (
+            self._flagged_by(ctx, [str(i.get("path", "")) for i in issues[:_MAX_FINDINGS]])
+            if issues else {})
+        for i, issue in enumerate(issues):
+            if i >= _MAX_FINDINGS:
+                findings.append(Finding(
+                    rule_id="HF_UPSTREAM_UNSAFE",
+                    severity=Severity.HIGH,
+                    title=f"{len(issues) - _MAX_FINDINGS} additional files flagged "
+                          "by HuggingFace Hub scanners (truncated)",
+                    detail=f"Only the first {_MAX_FINDINGS} upstream-flagged "
+                           "files are listed individually.",
+                    scanner=f"signals.{self.name}",
+                    tags=["upstream-intel"],
+                    evidence={"repo_id": ctx.repo_id, "flagged_total": len(issues)},
+                ))
+                break
+            fname = str(issue.get("path", ""))
+            level = str(issue.get("level", "")).strip().lower()
+            sev = Severity.HIGH if level in _UNSAFE else Severity.MEDIUM
+            rule = ("HF_UPSTREAM_UNSAFE" if sev >= Severity.HIGH
+                    else "HF_UPSTREAM_SUSPICIOUS")
             findings.append(Finding(
-                rule_id="HF_UPSTREAM_UNSAFE",
-                severity=Severity.HIGH,
-                title=f"{flagged - _MAX_FINDINGS} additional files flagged by "
-                      "HuggingFace Hub scanners (truncated)",
-                detail=f"Only the first {_MAX_FINDINGS} upstream-flagged files "
-                       "are listed individually.",
+                rule_id=rule,
+                severity=sev,
+                title=f"HuggingFace Hub scanners flag `{fname}` as "
+                      f"{level or 'an issue'}",
+                detail="Upstream verdict from the Hub's scan pipeline "
+                       "(picklescan / ClamAV / Protect AI / JFrog / "
+                       "VirusTotal), corroborating independent analysis. An "
+                       "upstream 'safe' is never used to downgrade Purser's "
+                       "own verdict.",
+                file=fname,
                 scanner=f"signals.{self.name}",
                 tags=["upstream-intel"],
-                evidence={"repo_id": ctx.repo_id, "flagged_total": flagged},
+                evidence={
+                    "repo_id": ctx.repo_id,
+                    "revision": ctx.revision or "main",
+                    "level": level,
+                    "reported_by": detail_by_path.get(fname, []),
+                },
             ))
-        if url and pages >= _MAX_PAGES:
+        if not status.get("scansDone", True):
             findings.append(unavailable_finding(
                 self.name,
-                f"repo tree paginates beyond {_MAX_PAGES} pages; upstream "
-                "verdicts beyond that were not fetched"))
+                f"the Hub has not finished scanning {ctx.repo_id}; upstream "
+                "verdicts are incomplete"))
         return findings

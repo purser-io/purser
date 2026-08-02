@@ -11,7 +11,7 @@ enforcement for ML model artifacts — from CI to Kubernetes admission.**
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-282%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-286%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
@@ -575,9 +575,10 @@ count toward the verdict, and can be tuned per rule with the normal policy
 **Built-in: HuggingFace Hub scan verdicts** (`hf-verdicts`). When scanning an
 `hf://` target (CLI) or via `POST /v1/scan/huggingface`, Purser also reads the
 Hub's own per-file scan verdicts (the Hub runs picklescan, ClamAV, Protect AI
-Guardian, and JFrog over uploads) and surfaces any upstream `unsafe` /
-`suspicious` verdict as a corroborating finding (`HF_UPSTREAM_UNSAFE` HIGH /
-`HF_UPSTREAM_SUSPICIOUS` MEDIUM):
+Guardian, JFrog, and VirusTotal over uploads) and surfaces any upstream
+`unsafe` / `caution` verdict as a corroborating finding
+(`HF_UPSTREAM_UNSAFE` HIGH / `HF_UPSTREAM_SUSPICIOUS` MEDIUM), recording
+which upstream scanners flagged the file as evidence:
 
 ```bash
 purser scan hf://org/model        # Purser's own analysis + the Hub's verdicts
