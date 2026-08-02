@@ -40,6 +40,14 @@ GitHub notes are generated automatically; this file is the curated summary.
   `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
   (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
   presence is deliberately not a finding and never improves a verdict.
+- **Known-bad denylist policy dimension** (`denylist:` block). Exact
+  file-content SHA-256s, publisher globs, and repo/name globs that always
+  `BLOCK` (`POLICY_DENYLIST_HASH` / `_PUBLISHER` / `_MODEL`), plus
+  `denylist.files` — external hash-feed files re-read on every evaluation so
+  a refreshed feed (remounted ConfigMap, synced IOC list) takes effect
+  without a policy reload. The offline AV-signature analogue for model
+  artifacts; generalizes the existing publisher/name blocklists with content
+  hashes.
 - **Scan→approve→admit loop** (`core/approvals.py`, opt-in
   `PURSER_AUTO_APPROVE=1`). Verdicts now populate the admission webhook's
   approved-digest list automatically: verdicts in

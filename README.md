@@ -248,6 +248,12 @@ models:                     # block/allow by model NAME (glob, case-insensitive)
     - "evilcorp/*"          #   and the scan target's basename
     - "*-backdoor"
     - "known-cve-model"
+denylist:                   # known-bad IOCs — any match is BLOCKED
+  hashes: ["sha256:<hex>"]  # exact file-content SHA-256s
+  publishers: ["evil-*"]    # publisher globs
+  models: ["*/nullif-ai*"]  # repo/name globs
+  files: [/feeds/bad.txt]   # external hash feeds (one digest per line),
+                            #   re-read every scan — refresh like AV signatures
 max_file_size_mb: 51200
 rules:                      # per-rule overrides
   - id: PICKLE_UNKNOWN_IMPORT
@@ -265,6 +271,14 @@ denied per policy.
 model's repo id (full and last component) and the scan target's basename. For a
 local file/dir, tag it with `--repo-id org/name` so name policies apply:
 `purser scan ./model --repo-id evilcorp/badmodel`.
+
+**Known-bad denylist** (the `denylist` block) is the AV-signature analogue for
+model artifacts: exact content hashes, publisher globs, and repo globs that
+always `BLOCK`. `denylist.files` points at external feed files (bare hex or
+`sha256:` lines, `#` comments) that are **re-read on every scan**, so an
+updated feed — a remounted ConfigMap, a synced IOC list — takes effect without
+a policy reload. Populate it from upstream `unsafe` verdicts, incident
+response, or your own curation.
 
 Example policies live in [`policies/`](policies/): `default.yaml`,
 `strict.yaml`, `allowlist-us-eu.yaml`, `signed-only.yaml`.
