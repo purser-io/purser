@@ -40,6 +40,18 @@ GitHub notes are generated automatically; this file is the curated summary.
   `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
   (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
   presence is deliberately not a finding and never improves a verdict.
+- **Loader-CVE mapping** (signal source `loader-cves`, **offline** — the
+  first signal that runs on local scans). Maps a detected format + the
+  framework version the artifact itself declares (`keras_version` in
+  `.keras`/`.h5`) to a curated, vendored dataset of known load-time RCEs
+  (`purser/data/loader_cves.yaml`: Keras `safe_mode` bypasses
+  CVE-2025-9906/-9905, Lambda CVE-2024-3660; sourced from OSV/GHSA). Emits a
+  LOW `LOADER_CVE` advisory only when a declared version is in an affected
+  range — no blanket per-format noise — and states that the loader, not the
+  artifact, is what's exposed. Signals now run on every scan with per-source
+  applicability (network sources still gate to hub scans; local scans still
+  make zero network calls, regression-tested). Benchmarks pin
+  `PURSER_SIGNALS=0` so published numbers keep measuring the static core.
 - **Known-bad denylist policy dimension** (`denylist:` block). Exact
   file-content SHA-256s, publisher globs, and repo/name globs that always
   `BLOCK` (`POLICY_DENYLIST_HASH` / `_PUBLISHER` / `_MODEL`), plus

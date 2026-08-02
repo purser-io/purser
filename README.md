@@ -426,7 +426,7 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_HF_ALLOWLIST` | *(empty)* | Comma-separated `org/` or `org/repo` prefixes permitted for the HF endpoint once enabled. |
 | `PURSER_ENABLE_DEEP` | `0` | Must be `1`/`true` to run the deep-analysis companion (see below). |
 | `PURSER_DEEP_URL` | *(empty)* | Base URL of the `purser-deep` service. If enabled but empty, the core runs the analyzers in-process when the package is importable. |
-| `PURSER_SIGNALS` | `1` | Disables all [signal sources](#signal-sources-upstream-intelligence) when falsy (`0`/`false`/`no`/`off`). Built-in sources run only on hub-fetched scans; third-party plugins decide their own applicability. |
+| `PURSER_SIGNALS` | `1` | Disables all [signal sources](#signal-sources-upstream-intelligence) when falsy (`0`/`false`/`no`/`off`). Network-using built-ins run only on hub-fetched scans; the offline `loader-cves` source runs on every scan; third-party plugins decide their own applicability. |
 | `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
 | `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
@@ -645,6 +645,17 @@ to *document themselves*: on hub scans it checks the declared model card and
 policy `rules:` can `ignore` or escalate to `deny` (undocumented model →
 `BLOCKED`). It gates the *attestation*, not the behavior: declared metrics are
 claims, not proof of safety, and presence of a card never improves a verdict.
+
+**Built-in: loader-CVE mapping** (`loader-cves`, **offline** — the first
+signal that runs on *local* scans too). No feed of malicious models exists,
+but framework loader CVEs are public: when an artifact **declares** a
+framework version (e.g. `keras_version` in a `.keras`/`.h5` file) that falls
+in the affected range of a known load-time RCE (Keras `safe_mode` bypasses
+CVE-2025-9906/-9905, Lambda-layer CVE-2024-3660), a LOW `LOADER_CVE` advisory
+is emitted from the vendored, curated dataset
+(`purser/data/loader_cves.yaml`). It fires only on a declared in-range
+version — never as blanket per-format noise — and says plainly that the
+*loader* is what's exposed, not that the artifact is malicious.
 
 **Writing your own.** Third-party sources register via the `purser.signals`
 entry-point group — expose a zero-arg factory returning an object with

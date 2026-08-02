@@ -126,8 +126,9 @@ def scan_target(
     """Scan a file or directory and evaluate the policy over the results.
 
     `signal_context` (where the artifact came from — hub, repo id, revision)
-    opts the scan into external signal sources (`purser.signals`); local scans
-    pass nothing and stay fully offline.
+    lets network-using signal sources (`purser.signals`) fetch upstream
+    intelligence; without it only offline sources (e.g. loader-CVE mapping)
+    apply, and the scan makes no network calls.
     """
     target = Path(target)
     policy = policy or Policy.default()
@@ -222,13 +223,14 @@ def scan_target(
                     report.deep_findings.append(f)
         report.metadata["deep_analysis"] = True
 
-    # External signal sources (upstream verdicts, plugins) — only when the
-    # caller says where the artifact came from; never for plain local scans.
-    if signal_context is not None:
-        ctx = signal_context
-        if ctx.target is None:
-            ctx.target = target
-        report.signal_findings = collect_signals(ctx)
+    # External signal sources (upstream verdicts, loader-CVE intel, plugins).
+    # Signals run on every scan; each source decides its own applicability —
+    # network-using sources gate themselves to hub-fetched scans (a context
+    # with source="huggingface"), offline sources apply everywhere.
+    ctx = signal_context or SignalContext()
+    if ctx.target is None:
+        ctx.target = target
+    report.signal_findings = collect_signals(ctx)
 
     report = policy.evaluate(report)
     report.duration_seconds = time.monotonic() - started

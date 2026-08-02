@@ -20,6 +20,8 @@ import json
 import time
 from pathlib import Path
 
+import os
+
 import kat
 from purser.core.policy import Policy
 from purser.core.scanner import scan_target
@@ -189,4 +191,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Measure the static core only: keep external signal sources out
+    # of the published numbers (see benchmarks/README.md).
+    os.environ.setdefault("PURSER_SIGNALS", "0")
     raise SystemExit(main())

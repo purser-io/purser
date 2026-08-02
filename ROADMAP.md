@@ -59,21 +59,20 @@ orchestrates detection rather than competing on it.
    layer to the enforcement layer directly.
 
 3. **Prove aggregation with a second real intel signal.**
-   - **Loader-CVE mapping (OSV/GHSA)** as an **offline** signal source — maps
-     detected format + declared framework version to known load-time RCEs
-     (details in the candidates table below). Needs no network at scan time,
-     so it also breaks the "signals are `-hf`-only" limitation; no OSS peer
-     has it.
-   - Then the **known-bad denylist** policy dimension (hash/publisher
-     denylists refreshable like AV signatures — could seed the open
-     malicious-model feed that doesn't exist yet) and cheap **MITRE ATLAS
-     tagging** for reviewer credibility.
-   - Small operability items that are really *adoption friction* on this same
-     path get pulled along: verdict-lookup caching by commit sha, and the
-     exfil-latency work (a gate that adds ~20 s per large model in CI is
-     friction on the product's main path; its fix — scan only structural
-     regions of known formats — is also the prerequisite for the
-     packed-binary-C2 residual).
+   - **Loader-CVE mapping — SHIPPED** as the offline `loader-cves` source:
+     declared framework version (e.g. `keras_version`) in a known load-time
+     RCE range → LOW `LOADER_CVE` advisory from the vendored curated dataset
+     (`data/loader_cves.yaml`). First signal that runs on local scans;
+     remaining refinement: automate dataset refresh from bulk OSV-JSON and
+     broaden beyond Keras (llama.cpp/GGUF needs a loader-version channel the
+     artifact doesn't carry).
+   - **Known-bad denylist — SHIPPED** (`denylist:` policy block; see
+     candidates table). Seeding an open malicious-model IOC feed remains the
+     open opportunity.
+   - Remaining in this arc: cheap **MITRE ATLAS tagging**, verdict-lookup
+     **caching by commit sha**, and the **exfil-latency** work (structural-
+     region scanning — also the prerequisite for the packed-binary-C2
+     residual).
 
 4. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
    Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`).

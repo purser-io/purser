@@ -22,6 +22,8 @@ inspects bytes. Nothing here is committed; it is generated into work/.
 """
 from __future__ import annotations
 
+import os
+
 import argparse
 import base64
 import json
@@ -261,4 +263,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Measure the static core only: keep external signal sources out
+    # of the published numbers (see benchmarks/README.md).
+    os.environ.setdefault("PURSER_SIGNALS", "0")
     raise SystemExit(main())

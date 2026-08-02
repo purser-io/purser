@@ -93,8 +93,9 @@ def source_enabled(name: str) -> bool:
 def _builtin_sources() -> list[SignalSource]:
     from purser.signals.card_attestations import CardAttestationsSource
     from purser.signals.hf_verdicts import HFVerdictsSource
+    from purser.signals.loader_cves import LoaderCVEsSource
 
-    return [HFVerdictsSource(), CardAttestationsSource()]
+    return [HFVerdictsSource(), CardAttestationsSource(), LoaderCVEsSource()]
 
 
 def _plugin_sources() -> list[SignalSource]:

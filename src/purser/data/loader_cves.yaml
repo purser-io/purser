@@ -1,0 +1,37 @@
+# Curated loader-CVE dataset for the `loader-cves` signal source.
+#
+# Each entry maps a model format + the framework version an artifact DECLARES
+# to a known load-time vulnerability in that framework's loader. The signal
+# fires only when a scanned artifact declares a version inside the affected
+# range — never as blanket per-format noise.
+#
+# Sourced from OSV/GHSA records (see `reference:`); refresh by checking
+# https://osv.dev for the frameworks below. Version specs are comma-separated
+# comparators over dotted numeric versions (e.g. ">=3.0,<3.11.3").
+
+- cve: CVE-2025-9906
+  framework: keras
+  formats: [keras_v3, keras_h5]
+  affected: ">=3.0,<3.11.3"
+  summary: >-
+    Keras safe_mode bypass — a crafted model archive can execute arbitrary
+    code when loaded with an affected Keras version even with safe_mode=True.
+  reference: https://osv.dev/vulnerability/CVE-2025-9906
+
+- cve: CVE-2025-9905
+  framework: keras
+  formats: [keras_v3, keras_h5]
+  affected: ">=3.0,<3.11.3"
+  summary: >-
+    Keras safe_mode bypass via crafted model deserialization; code execution
+    on load under an affected Keras version.
+  reference: https://osv.dev/vulnerability/CVE-2025-9905
+
+- cve: CVE-2024-3660
+  framework: keras
+  formats: [keras_h5, keras_v3]
+  affected: "<2.13"
+  summary: >-
+    Keras Lambda-layer deserialization executes arbitrary code on load
+    (marshaled bytecode in Lambda layers) in Keras/TF-Keras before 2.13.
+  reference: https://osv.dev/vulnerability/CVE-2024-3660
