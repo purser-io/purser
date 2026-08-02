@@ -167,7 +167,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 | Criterion | Level | Answer | Justification to paste |
 |---|---|---|---|
 | know_secure_design | MUST | Met | `SECURITY.md` (threat model, hardening, residual risk); the scanner never deserializes/executes a model, and signal-source responses are parsed as data, never executed. |
-| know_common_errors | MUST | Met | No deserialization; zip-bomb/zip-slip guards, size caps, path confinement; signal-source HTTP is hub-only with request timeouts, add-only findings, and fail-visible (`SIGNAL_UNAVAILABLE`) degradation. |
+| know_common_errors | MUST | Met | No deserialization; zip-bomb/zip-slip guards, size caps, path confinement; signal-source HTTP is hub-only with request timeouts, add-only findings, and fail-visible (`SIGNAL_UNAVAILABLE`) degradation; the `update-intel` fetch is user-invoked only, schema-validated, and rejects bad payloads while keeping the previous dataset. |
 | crypto_published | MUST | Met | Ed25519 signatures; Sigstore (Fulcio/Rekor); cosign for artifacts. |
 | crypto_call | SHOULD | Met | Uses `cryptography` / `sigstore` — no roll-your-own crypto. |
 | crypto_floss | MUST | Met | Both crypto libraries are FLOSS. |

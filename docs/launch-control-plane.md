@@ -55,6 +55,14 @@ As of this release, Purser's verdict aggregates:
   Protect AI, JFrog, and VirusTotal for free. One rule keeps this honest: upstream
   *unsafe* corroborates; upstream *safe* never downgrades what Purser's own
   analysis found (upstream scanners have documented false negatives).
+- **Loader-CVE intel, refreshable like AV signatures** — an artifact that
+  declares its framework version (`keras_version`, `transformers_version`)
+  gets checked against a model-scoped dataset of known load-time CVEs,
+  regenerated weekly from OSV.dev. Fully offline at scan time, and end users
+  refresh it *without upgrading*: `purser update-intel`.
+- **A known-bad denylist** — content hashes and publisher/repo globs in
+  policy, with external feed files re-read every scan — the AV-signature
+  analogue for model artifacts.
 - **Verified provenance** — Ed25519 signing with a trust store and
   revocation, plus offline Sigstore (Fulcio/Rekor) identity verification.
 - **The deep companion** — opt-in pickle gadget-chain and weight
@@ -63,10 +71,14 @@ As of this release, Purser's verdict aggregates:
   (model card, declared eval results), which policy can escalate to blocking.
 - **Your signals** — third-party sources plug in via a Python entry point
   (`purser.signals`) and land in the same report, policy, and verdict.
+- **MITRE ATLAS tags** — every finding carries the adversary-ML technique it
+  evidences, for SARIF/SOC pipelines.
 
 Every signal flows through the same policy engine, and the verdict is
 enforced in three places: exit codes in CI, a REST API for
-registry/promotion hooks, and the admission webhook at deploy time.
+registry/promotion hooks, and the admission webhook at deploy time — where
+the approved-model list can now **maintain itself**: a PASS approves the
+digest, a later FAIL revokes it. Scan → approve → admit, no manual hop.
 
 ## What Purser is not
 

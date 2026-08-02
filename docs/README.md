@@ -27,8 +27,10 @@ protect against.
   dangerous, giving a simple verdict: **PASS**, **WARN**, **FAIL**, or
   **BLOCKED**.
 - The verdict can draw on more than Purser's own scan: verified signatures,
-  Hugging Face's own scan results, and (opt-in) whether the model documents
-  itself with a model card.
+  Hugging Face's own scan results, known security bugs in the framework
+  version the model declares (kept current with `purser update-intel` — no
+  reinstall needed), and (opt-in) whether the model documents itself with a
+  model card.
 - You can add a **policy** — your team's rules — such as "only allow safe file
   types" or "block models from certain sources."
 - It runs as a command-line tool, a small web service, or a container — and in

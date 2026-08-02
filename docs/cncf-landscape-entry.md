@@ -34,6 +34,7 @@ Under the `Provisioning` category, `Security & Compliance` subcategory:
     description: >-
       Model supply-chain control plane for ML artifacts: aggregates signals —
       a never-execute static scanner (~35 formats), upstream scanner verdicts,
+      refreshable loader-CVE intel and known-bad denylists,
       signed/verified provenance (Ed25519/Sigstore), and pluggable
       third-party sources — under a policy engine (country of origin,
       publisher, format, signer identity) whose verdict is enforced in CI,

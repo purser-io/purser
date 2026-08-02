@@ -13,8 +13,10 @@ Working draft for the [Sandbox application form](https://github.com/cncf/sandbox
 **Description:** The open-source model supply-chain control plane: a policy,
 provenance, and enforcement layer for ML model artifacts. Purser aggregates
 signals about a model — its own never-execute static scanner (~35 formats),
-upstream scanner verdicts (e.g. the HuggingFace Hub's scan pipeline), an
-opt-in model-card/eval-attestation gate,
+upstream scanner verdicts (e.g. the HuggingFace Hub's scan pipeline),
+refreshable loader-CVE intelligence (model-scoped, regenerated weekly from
+OSV.dev, end-user updates via `purser update-intel`), a known-bad denylist,
+an opt-in model-card/eval-attestation gate,
 Ed25519/Sigstore verified provenance, and pluggable third-party sources (the
 `purser.signals` entry-point interface) — and
 renders a single policy verdict enforced in CI (exit codes / GitHub Action),
