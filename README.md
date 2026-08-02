@@ -11,7 +11,7 @@ enforcement for ML model artifacts — from CI to Kubernetes admission.**
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-282%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
@@ -59,7 +59,7 @@ hidden under a `README.md`, is still caught.
 - [Using Purser](#using-purser) · [What it detects](#what-it-detects) · [How Purser compares](#how-purser-compares)
 - [Policy engine](#policy-engine) · [Verified provenance](#verified-provenance-model-signing) · [Authentication](#authentication-and-api-keys)
 - [Install & CLI](#install-and-cli-usage) · [REST API](#rest-api) · [Observability](#observability)
-- [Docker](#docker) · [Kubernetes](#kubernetes) · [Deep analysis](#deep-analysis-optional-companion) · [Supply chain](#supply-chain-of-purser-itself)
+- [Docker](#docker) · [Kubernetes](#kubernetes) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself)
 - [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [License](#license)
 
 ## Using Purser
@@ -390,6 +390,9 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_HF_ALLOWLIST` | *(empty)* | Comma-separated `org/` or `org/repo` prefixes permitted for the HF endpoint once enabled. |
 | `PURSER_ENABLE_DEEP` | `0` | Must be `1`/`true` to run the deep-analysis companion (see below). |
 | `PURSER_DEEP_URL` | *(empty)* | Base URL of the `purser-deep` service. If enabled but empty, the core runs the analyzers in-process when the package is importable. |
+| `PURSER_SIGNALS` | `1` | `0`/`false` disables all external [signal sources](#signal-sources-upstream-intelligence). They only run on hub-fetched scans regardless. |
+| `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
+| `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
 | `PURSER_SCAN_ROOT` | `/models` | Path-scan confinement root. |
 | `PURSER_METRICS_ENABLED` | `1` | `0`/`false` disables the `/metrics` endpoint. |
 | `PURSER_AUDIT` | `off` | `stdout` or `syslog` to emit a JSON audit record per scan. |
@@ -560,6 +563,51 @@ a strong second opinion, not a gate on their own. They do **not** detect
 *trained* backdoors / data poisoning (learned behavior), which needs
 model-evaluation tooling and stays out of scope. CVE feeds and volumetric-DoS
 protection are also out of scope (use an edge WAF / scanner platform).
+
+## Signal sources (upstream intelligence)
+
+As a control plane, Purser's verdict aggregates **signals** — and external
+intelligence about an artifact plugs into the same policy engine as the
+built-in scanners. Signal findings appear as `signal_findings` in the report,
+count toward the verdict, and can be tuned per rule with the normal policy
+`rules:` overrides.
+
+**Built-in: HuggingFace Hub scan verdicts** (`hf-verdicts`). When scanning an
+`hf://` target (CLI) or via `POST /v1/scan/huggingface`, Purser also reads the
+Hub's own per-file scan verdicts (the Hub runs picklescan, ClamAV, Protect AI
+Guardian, and JFrog over uploads) and surfaces any upstream `unsafe` /
+`suspicious` verdict as a corroborating finding (`HF_UPSTREAM_UNSAFE` HIGH /
+`HF_UPSTREAM_SUSPICIOUS` MEDIUM):
+
+```bash
+purser scan hf://org/model        # Purser's own analysis + the Hub's verdicts
+```
+
+Two rules keep this honest:
+
+- **Upstream `unsafe` is a signal; upstream `safe` is not.** Hub scanners have
+  documented false negatives, so a clean upstream verdict never downgrades or
+  masks what Purser's own analysis found.
+- **No new network paths.** Signal sources only run when the artifact was
+  fetched from a hub in the first place (the `-hf` path, where network is
+  already gated); plain local scans stay fully offline. If verdicts can't be
+  fetched, the gap is visible as a `SIGNAL_UNAVAILABLE` finding rather than
+  silently missing coverage.
+
+**Writing your own.** Third-party sources register via the `purser.signals`
+entry-point group — expose a zero-arg factory returning an object with
+`name`, `available(ctx)`, and `collect(ctx) -> list[Finding]`:
+
+```toml
+# your plugin's pyproject.toml
+[project.entry-points."purser.signals"]
+my-feed = "my_pkg.purser_plugin:MyFeedSource"
+```
+
+Sources must never raise (report trouble as a finding), and may only *add*
+findings — a source cannot suppress another signal or downgrade the verdict.
+Disable all sources with `PURSER_SIGNALS=0`, or one with
+`PURSER_SIGNAL_<NAME>=0` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`).
 
 ## Supply chain (of Purser itself)
 

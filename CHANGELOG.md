@@ -6,7 +6,31 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
+### Changed
+- **Repositioned as a model supply-chain control plane.** README, roadmap,
+  package/CLI/API descriptions now lead with what differentiates Purser —
+  policy + provenance + enforcement across CI and Kubernetes admission, with
+  scanning as one signal input. No functional change; the never-execute
+  guarantee and "clean scan ≠ safe" scope statements are unchanged.
+
 ### Added
+- **Pluggable signal sources (`purser.signals`).** External intelligence about
+  a scanned artifact now plugs into the policy engine as a first-class signal:
+  findings land on a new `signal_findings` report channel, count toward the
+  verdict, honor policy `rules:` overrides, and third-party sources register
+  via the `purser.signals` entry-point group (a plugin that fails to load
+  surfaces as a `SIGNAL_UNAVAILABLE` coverage-gap finding, never an error).
+  Gates: `PURSER_SIGNALS=0` (all), `PURSER_SIGNAL_<NAME>=0` (per source),
+  `PURSER_SIGNAL_TIMEOUT_SECONDS` (default 10).
+- **HuggingFace upstream scan-verdict ingestion** (signal source
+  `hf-verdicts`). Scans on the `-hf` path (`hf://` targets,
+  `POST /v1/scan/huggingface`) also read the Hub's per-file
+  `securityFileStatus` verdicts — inheriting its picklescan / ClamAV /
+  Protect AI / JFrog scans — and surface upstream `unsafe` / `suspicious` as
+  corroborating `HF_UPSTREAM_UNSAFE` (HIGH) / `HF_UPSTREAM_SUSPICIOUS`
+  (MEDIUM) findings. An upstream `safe` verdict never downgrades Purser's own
+  analysis, and plain local scans remain fully offline (regression-tested).
+  Honors `HF_ENDPOINT` and `HF_TOKEN`; follows tree-API pagination.
 - **Dataflow/taint analysis of bundled Python source.** A per-scope,
   intraprocedural taint pass catches trust-remote-code payloads assembled or
   resolved at runtime that a literal call-name match misses: a dangerous callable
