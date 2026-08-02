@@ -2,6 +2,17 @@
 # Publisher keys are lowercase HuggingFace org names (or arbitrary publisher
 # ids you use in provenance sidecars). Extend or override with
 # /etc/purser/origins.yaml or the PURSER_ORIGINS env var.
+#
+# SOURCING & TRUST: entries are a hand-maintained heuristic — each maps an
+# org name to the country of the organization's public headquarters
+# (company filings / official about-pages at the time of entry). This is
+# ADVISORY provenance: it is spoofable by naming, outranked by a verified
+# signature (`require_signed` + trust store / Sigstore identity), and never
+# treated as authoritative on its own (see SECURITY.md, "Spoofed provenance").
+#
+# REVIEW CADENCE: re-verify entries at every minor (0.x) release — orgs get
+# acquired and relocate. Corrections via PR are welcome; each change should
+# cite a public source in the PR description. Last full review: 2026-08-02.
 publishers:
   # United States
   meta-llama: US

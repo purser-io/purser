@@ -11,7 +11,7 @@ enforcement for ML model artifacts — from CI to Kubernetes admission.**
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-292%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)

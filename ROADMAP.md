@@ -22,7 +22,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 deploy-time admission enforcement, Sigstore verified-identity provenance,
 pluggable signal sources with upstream-verdict ingestion (`purser.signals`), and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(292 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(330 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -164,7 +164,7 @@ because they lead.
 
 | Item | Notes |
 |---|---|
-| Origin database provenance | `org_countries.yaml` is a hand-maintained heuristic; document sourcing + a review cadence, or derive origin only from verified signers once the PKI trust root lands. |
+| Origin database provenance — **documented** | Sourcing + review cadence now documented in the file header (`data/org_countries.yaml`: HQ-country heuristic, advisory-only, outranked by verified signatures, re-verified each minor release). The stronger alternative — deriving origin *only* from verified signers — remains available to strict deployments today via `require_signed` + a curated trust store. |
 
 ## Candidates — ecosystem intelligence & provenance interop
 
