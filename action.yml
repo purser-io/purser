@@ -29,7 +29,7 @@ inputs:
     default: "purser.sarif"
   version:
     description: "Purser version to install from PyPI."
-    default: "0.2.1"
+    default: "0.3.0"
   extras:
     description: "pip extra to enable, e.g. 'hf' to allow scanning hf:// targets."
     default: ""

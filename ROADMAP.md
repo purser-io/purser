@@ -14,7 +14,7 @@ Forward-looking work. Competitive positioning is in the
 [comparison chart](README.md#how-purser-compares); shipped history is in
 [`CHANGELOG.md`](CHANGELOG.md). This file tracks what is **not done yet** and why.
 
-Purser is released and installable (**v0.2.1** — on PyPI, with signed multi-arch
+Purser is released and installable (**v0.3.0** — on PyPI, with signed multi-arch
 container images and a signed Helm chart on GHCR, built and published by CI). The
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /

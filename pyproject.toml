@@ -1,6 +1,6 @@
 [project]
 name = "purser"
-version = "0.2.1"
+version = "0.3.0"
 description = "Model supply-chain control plane: policy, provenance, and enforcement for ML model artifacts — static malicious-code/exfiltration scanning as one signal, enforced in CI and at Kubernetes admission"
 readme = "README.md"
 requires-python = ">=3.11"
