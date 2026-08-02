@@ -52,17 +52,24 @@ GitHub notes are generated automatically; this file is the curated summary.
   incomplete upstream scans are never cached, and cache hits return copies,
   never shared finding objects.
 - **Loader-CVE mapping** (signal source `loader-cves`, **offline** — the
-  first signal that runs on local scans). Maps a detected format + the
-  framework version the artifact itself declares (`keras_version` in
-  `.keras`/`.h5`) to a curated, vendored dataset of known load-time RCEs
-  (`purser/data/loader_cves.yaml`: Keras `safe_mode` bypasses
-  CVE-2025-9906/-9905, Lambda CVE-2024-3660; sourced from OSV/GHSA). Emits a
-  LOW `LOADER_CVE` advisory only when a declared version is in an affected
-  range — no blanket per-format noise — and states that the loader, not the
-  artifact, is what's exposed. Signals now run on every scan with per-source
-  applicability (network sources still gate to hub scans; local scans still
-  make zero network calls, regression-tested). Benchmarks pin
-  `PURSER_SIGNALS=0` so published numbers keep measuring the static core.
+  first signal that runs on local scans). Maps the framework version an
+  artifact itself declares — `keras_version` in `.keras`/`.h5`, or
+  `transformers_version` in an HF `config.json` — to a vendored,
+  **model-scoped** dataset of load-time vulnerabilities regenerated from
+  **OSV.dev** (`scripts/refresh_loader_cves.py`: only tracked loader
+  packages, only load-time CWEs — deserialization/code-exec/traversal/
+  load-bombs; ReDoS-class noise filtered; 21 entries across Keras +
+  transformers at import). One aggregated LOW `LOADER_CVE` advisory per
+  file (matched CVEs in evidence + the `clear_at` version that clears every
+  range) — no blanket per-format noise — stating that the loader, not the
+  artifact, is exposed. Refresh cadence: `make loader-cves` +
+  a weekly workflow (`loader-cve-refresh.yml`) that opens a human-reviewed
+  PR with the filter's keep/skip report on drift; operators can point
+  `PURSER_LOADER_CVES` at a fresher dataset without upgrading. Signals now
+  run on every scan with per-source applicability (network sources still
+  gate to hub scans; local scans still make zero network calls,
+  regression-tested). Benchmarks pin `PURSER_SIGNALS=0` so published
+  numbers keep measuring the static core.
 - **Known-bad denylist policy dimension** (`denylist:` block). Exact
   file-content SHA-256s, publisher globs, and repo/name globs that always
   `BLOCK` (`POLICY_DENYLIST_HASH` / `_PUBLISHER` / `_MODEL`), plus

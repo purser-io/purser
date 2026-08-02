@@ -59,13 +59,14 @@ orchestrates detection rather than competing on it.
    layer to the enforcement layer directly.
 
 3. **Prove aggregation with a second real intel signal.**
-   - **Loader-CVE mapping — SHIPPED** as the offline `loader-cves` source:
-     declared framework version (e.g. `keras_version`) in a known load-time
-     RCE range → LOW `LOADER_CVE` advisory from the vendored curated dataset
-     (`data/loader_cves.yaml`). First signal that runs on local scans;
-     remaining refinement: automate dataset refresh from bulk OSV-JSON and
-     broaden beyond Keras (llama.cpp/GGUF needs a loader-version channel the
-     artifact doesn't carry).
+   - **Loader-CVE mapping — SHIPPED (incl. automated refresh)** as the
+     offline `loader-cves` source: declared framework version
+     (`keras_version` / `transformers_version`) in a known load-time-CVE
+     range → one aggregated LOW `LOADER_CVE` advisory per file. Dataset is
+     regenerated from OSV.dev, model-scoped (tracked packages + load-time
+     CWEs only), on a **weekly PR cadence** (`loader-cve-refresh.yml`) with
+     `PURSER_LOADER_CVES` for operator-side refresh. Remaining: more
+     version channels (llama.cpp/GGUF lacks one the artifact carries).
    - **Known-bad denylist — SHIPPED** (`denylist:` policy block; see
      candidates table). Seeding an open malicious-model IOC feed remains the
      open opportunity.

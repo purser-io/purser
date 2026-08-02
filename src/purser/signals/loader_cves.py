@@ -1,13 +1,19 @@
 """Loader-CVE mapping — known load-time RCEs as an offline signal source.
 
 There is no feed of malicious *models*, but framework/parser CVEs are public:
-a `.keras` archive that declares `keras_version: 3.9.0` is telling you which
-loader family the publisher used — and Keras < 3.11.3 has documented
-`safe_mode` bypasses (CVE-2025-9906/-9905). This source maps a **detected
-format + the framework version the artifact itself declares** to a curated,
-vendored dataset of load-time CVEs (`purser/data/loader_cves.yaml`, sourced
-from OSV/GHSA) and emits an advisory finding when the declared version falls
-in an affected range.
+a `.keras` archive that declares `keras_version: 3.9.0` — or an HF
+`config.json` that declares `transformers_version` — is telling you which
+loader family the publisher used, and those loaders have documented
+load-time vulnerabilities. This source maps a **declared framework version**
+to a vendored, model-scoped dataset (`purser/data/loader_cves.yaml`,
+regenerated from OSV.dev by `make loader-cves` / the weekly refresh
+workflow) and emits an advisory finding when the version falls in an
+affected range.
+
+Version channels (how an artifact declares a version):
+  * ``keras_version``        — `.keras` v3 archive metadata, or the H5
+                                attribute block (byte heuristic)
+  * ``transformers_version`` — HF `config.json`
 
 Honesty rules:
   * The CVE is in the **loader**, not the artifact — the finding says
@@ -15,9 +21,9 @@ Honesty rules:
     not call the artifact malicious. Severity LOW, policy-escalatable.
   * Fires **only on a declared in-range version** — never as blanket
     per-format noise (an unversioned artifact produces nothing).
-  * Fully **offline**: the dataset is vendored; this source runs on local
-    scans too (it is the first signal that does — network-using sources
-    still gate themselves to hub scans).
+  * Fully **offline**: the dataset is vendored (override with
+    ``PURSER_LOADER_CVES=/path/to/dataset.yaml`` to refresh without
+    upgrading); this source runs on local scans too.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from pathlib import Path
 
 import yaml
 
+from purser.core.env import env_get
 from purser.core.findings import Finding, Severity
 from purser.signals import SignalContext
 
@@ -37,11 +44,19 @@ _VERSION_RE = re.compile(r"(\d+(?:\.\d+)+)")
 _H5_HEAD = 256 * 1024  # keras_version lives in the attribute block near the top
 
 _KERAS_EXTS = {".keras", ".h5", ".hdf5"}
+_MAX_JSON = 1024 * 1024
 
 
 def _dataset() -> list[dict]:
-    text = (resources.files("purser.data") / "loader_cves.yaml").read_text()
-    data = yaml.safe_load(text) or []
+    override = env_get("LOADER_CVES", "")
+    try:
+        if override:
+            text = Path(override).read_text()
+        else:
+            text = (resources.files("purser.data") / "loader_cves.yaml").read_text()
+        data = yaml.safe_load(text) or []
+    except (OSError, yaml.YAMLError):
+        return []
     return [e for e in data if isinstance(e, dict)]
 
 
@@ -74,6 +89,14 @@ def _in_range(version: str, spec: str) -> bool:
     return True
 
 
+def _affected(version: str, spec: "str | list") -> bool:
+    """`affected` may be one spec or a list of specs (any-of)."""
+    specs = spec if isinstance(spec, list) else [spec]
+    return any(_in_range(version, str(s)) for s in specs)
+
+
+# --- version channels -----------------------------------------------------------
+
 def _keras_version_from_zip(path: Path) -> str | None:
     """`keras_version` from a .keras v3 archive's metadata/config (no load)."""
     try:
@@ -81,7 +104,7 @@ def _keras_version_from_zip(path: Path) -> str | None:
             for member in ("metadata.json", "config.json"):
                 if member in zf.namelist():
                     with zf.open(member) as fh:
-                        doc = json.loads(fh.read(1024 * 1024).decode(errors="replace"))
+                        doc = json.loads(fh.read(_MAX_JSON).decode(errors="replace"))
                     v = doc.get("keras_version")
                     if isinstance(v, str) and _VERSION_RE.search(v):
                         return v
@@ -104,17 +127,68 @@ def _keras_version_from_h5(path: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def _declared_keras_version(path: Path) -> str | None:
+def _keras_channel(path: Path) -> str | None:
     if path.suffix.lower() == ".keras":
         return _keras_version_from_zip(path)
     if path.suffix.lower() in (".h5", ".hdf5"):
         return _keras_version_from_h5(path)
-    # a .keras archive renamed — try both cheaply
     return _keras_version_from_zip(path) or _keras_version_from_h5(path)
 
 
+def _transformers_channel(path: Path) -> str | None:
+    """`transformers_version` from an HF config.json."""
+    if path.name.lower() != "config.json":
+        return None
+    try:
+        if path.stat().st_size > _MAX_JSON:
+            return None
+        doc = json.loads(path.read_text(errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(doc, dict):
+        return None
+    v = doc.get("transformers_version")
+    if isinstance(v, str) and _VERSION_RE.search(v):
+        return v
+    return None
+
+
+# channel name -> (file filter, version extractor)
+_CHANNELS: dict = {
+    "keras_version": (
+        lambda p: p.suffix.lower() in _KERAS_EXTS,
+        _keras_channel,
+    ),
+    "transformers_version": (
+        lambda p: p.name.lower() == "config.json",
+        _transformers_channel,
+    ),
+}
+
+
+def _entry_channel(entry: dict) -> str:
+    # older entries carried only `framework: keras`
+    return str(entry.get("channel") or f"{entry.get('framework', '')}_version")
+
+
+def _clear_at(matched: list[dict]) -> str:
+    """The smallest version that clears every matched range: the max `<bound`."""
+    best: tuple[int, ...] = ()
+    best_str = ""
+    for e in matched:
+        spec = e.get("affected", "")
+        for s in (spec if isinstance(spec, list) else [spec]):
+            for part in str(s).split(","):
+                part = part.strip()
+                if part.startswith("<") and not part.startswith("<="):
+                    bound = _vtuple(part[1:])
+                    if bound > best:
+                        best, best_str = bound, part[1:].strip()
+    return best_str
+
+
 class LoaderCVEsSource:
-    """Advise when an artifact declares a framework version with load-time RCEs."""
+    """Advise when an artifact declares a framework version with load-time CVEs."""
 
     name = "loader-cves"
 
@@ -125,38 +199,59 @@ class LoaderCVEsSource:
         target = Path(ctx.target) if ctx.target else None
         if target is None:
             return []
-        files = [target] if target.is_file() else [
-            p for p in sorted(target.rglob("*"))
-            if p.is_file() and p.suffix.lower() in _KERAS_EXTS
+        entries_by_channel: dict[str, list[dict]] = {}
+        for e in _dataset():
+            ch = _entry_channel(e)
+            if ch in _CHANNELS:
+                entries_by_channel.setdefault(ch, []).append(e)
+        if not entries_by_channel:
+            return []
+
+        candidates = [target] if target.is_file() else [
+            p for p in sorted(target.rglob("*")) if p.is_file()
         ]
-        entries = [e for e in _dataset() if e.get("framework") == "keras"]
         findings: list[Finding] = []
-        for path in files:
-            if path.suffix.lower() not in _KERAS_EXTS and target.is_dir():
-                continue
-            version = _declared_keras_version(path)
-            if not version:
-                continue
-            for e in entries:
-                if not _in_range(version, str(e.get("affected", ""))):
+        for path in candidates:
+            for channel, entries in entries_by_channel.items():
+                file_filter, extractor = _CHANNELS[channel]
+                if target.is_dir() and not file_filter(path):
                     continue
-                cve = str(e.get("cve", ""))
+                version = extractor(path)
+                if not version:
+                    continue
+                matched = [e for e in entries
+                           if _affected(version, e.get("affected", ""))]
+                if not matched:
+                    continue
+                # ONE aggregated finding per file+framework — an old artifact
+                # can match many CVEs, and nine findings for one fact is noise.
+                framework = str(matched[0].get("framework", ""))
+                clear_at = _clear_at(matched)
+                sample = "; ".join(
+                    f"{e.get('cve')} ({str(e.get('summary', '')).strip()[:80]})"
+                    for e in matched[:3])
+                more = f" (+{len(matched) - 3} more)" if len(matched) > 3 else ""
                 findings.append(Finding(
                     rule_id="LOADER_CVE",
                     severity=Severity.LOW,
-                    title=f"Declared {e['framework']} {version} is in the "
-                          f"affected range of {cve}",
-                    detail=f"{e.get('summary', '').strip()} Environments "
-                           f"loading this artifact with {e['framework']} "
-                           f"{e.get('affected')} are exposed; the artifact "
-                           "itself is not thereby malicious. "
-                           f"Ref: {e.get('reference', '')}",
+                    title=f"Declared {framework} {version} matches "
+                          f"{len(matched)} known load-time CVE"
+                          f"{'s' if len(matched) != 1 else ''}",
+                    detail=f"{sample}{more}. Loading this artifact with the "
+                           f"declared {framework} version is exposed to known "
+                           "load-time vulnerabilities; the artifact itself is "
+                           "not thereby malicious."
+                           + (f" A loader at {framework} >= {clear_at} clears "
+                              "every matched range." if clear_at else ""),
                     file=str(path),
                     scanner=f"signals.{self.name}",
                     tags=["loader-cve", "advisory"],
-                    evidence={"cve": cve, "framework": e.get("framework"),
+                    evidence={"framework": framework,
                               "declared_version": version,
-                              "affected": e.get("affected"),
-                              "reference": e.get("reference")},
+                              "clear_at": clear_at,
+                              "cves": [{"cve": e.get("cve"),
+                                        "affected": e.get("affected"),
+                                        "reference": e.get("reference")}
+                                       for e in matched]},
                 ))
         return findings

@@ -438,6 +438,7 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
 | `PURSER_SIGNAL_CACHE_TTL` | `300` | Seconds to cache hub verdict lookups for mutable refs (`main`); a 40-hex commit-sha revision caches for the process lifetime. `0` disables. Failures are never cached. |
 | `PURSER_ATLAS` | `1` | `0` disables [MITRE ATLAS](https://atlas.mitre.org) technique tags (`atlas:AML.T####`) appended to findings. |
+| `PURSER_LOADER_CVES` | *(vendored)* | Path to a loader-CVE dataset that replaces the vendored one — refresh intel without upgrading (`make loader-cves` regenerates from OSV.dev). |
 | `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
 | `PURSER_AUTO_APPROVE` | `0` | `1` auto-populates the admission webhook's approved-digest list from verdicts: verdicts in `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's sha256; FAIL/BLOCKED revokes. |
 | `PURSER_APPROVALS_PATH` | *(unset)* | File backend for auto-approval (the exact format the webhook reads — commit/sync it into the ConfigMap via GitOps). |
@@ -658,11 +659,18 @@ claims, not proof of safety, and presence of a card never improves a verdict.
 **Built-in: loader-CVE mapping** (`loader-cves`, **offline** — the first
 signal that runs on *local* scans too). No feed of malicious models exists,
 but framework loader CVEs are public: when an artifact **declares** a
-framework version (e.g. `keras_version` in a `.keras`/`.h5` file) that falls
-in the affected range of a known load-time RCE (Keras `safe_mode` bypasses
-CVE-2025-9906/-9905, Lambda-layer CVE-2024-3660), a LOW `LOADER_CVE` advisory
-is emitted from the vendored, curated dataset
-(`purser/data/loader_cves.yaml`). It fires only on a declared in-range
+framework version — `keras_version` in a `.keras`/`.h5` file, or
+`transformers_version` in an HF `config.json` — that falls in the affected
+range of a known load-time vulnerability, one aggregated LOW `LOADER_CVE`
+advisory is emitted per file (all matched CVEs in evidence, plus the
+`clear_at` version that clears every range). The vendored dataset
+(`purser/data/loader_cves.yaml`) is **model-scoped by construction** — only
+packages whose version an artifact can declare, only load-time CWEs
+(deserialization / code-exec / traversal / load-bombs; ReDoS-class noise is
+filtered out) — and is **refreshed from OSV.dev on a weekly cadence**
+(`make loader-cves` locally; a scheduled workflow opens a human-reviewed PR
+on drift). Operators can point `PURSER_LOADER_CVES=/path/dataset.yaml` at a
+fresher copy without upgrading. It fires only on a declared in-range
 version — never as blanket per-format noise — and says plainly that the
 *loader* is what's exposed, not that the artifact is malicious.
 

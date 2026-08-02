@@ -1,37 +1,230 @@
 # Curated loader-CVE dataset for the `loader-cves` signal source.
 #
-# Each entry maps a model format + the framework version an artifact DECLARES
-# to a known load-time vulnerability in that framework's loader. The signal
-# fires only when a scanned artifact declares a version inside the affected
-# range — never as blanket per-format noise.
+# Model-scoped by construction: entries exist only for packages whose version
+# a model artifact can DECLARE (the `channel`), and only for vulnerabilities
+# that bite at MODEL LOAD TIME (deserialization / code-exec / path-traversal /
+# load-bomb CWEs). The signal fires only when a scanned artifact declares a
+# version inside an affected range — never as blanket per-format noise.
 #
-# Sourced from OSV/GHSA records (see `reference:`); refresh by checking
-# https://osv.dev for the frameworks below. Version specs are comma-separated
-# comparators over dotted numeric versions (e.g. ">=3.0,<3.11.3").
-
-- cve: CVE-2025-9906
-  framework: keras
-  formats: [keras_v3, keras_h5]
-  affected: ">=3.0,<3.11.3"
-  summary: >-
-    Keras safe_mode bypass — a crafted model archive can execute arbitrary
-    code when loaded with an affected Keras version even with safe_mode=True.
-  reference: https://osv.dev/vulnerability/CVE-2025-9906
-
-- cve: CVE-2025-9905
-  framework: keras
-  formats: [keras_v3, keras_h5]
-  affected: ">=3.0,<3.11.3"
-  summary: >-
-    Keras safe_mode bypass via crafted model deserialization; code execution
-    on load under an affected Keras version.
-  reference: https://osv.dev/vulnerability/CVE-2025-9905
+# REFRESH: `make loader-cves` regenerates this file from OSV.dev (see
+# scripts/refresh_loader_cves.py for the relevance filter); the weekly
+# `loader-cve-refresh.yml` workflow opens a PR when it drifts. Entries with
+# `curated: true` are preserved verbatim across refreshes. Operators can point
+# PURSER_LOADER_CVES at their own copy without upgrading.
+#
+# Last refreshed: 2026-08-02 (source: OSV.dev; human-reviewed via PR)
 
 - cve: CVE-2024-3660
   framework: keras
-  formats: [keras_h5, keras_v3]
-  affected: "<2.13"
-  summary: >-
-    Keras Lambda-layer deserialization executes arbitrary code on load
-    (marshaled bytecode in Lambda layers) in Keras/TF-Keras before 2.13.
-  reference: https://osv.dev/vulnerability/CVE-2024-3660
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <2.13.1rc0
+  summary: Keras code injection vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-x4wf-678h-2pmq
+  source: 'osv (cwe: CWE-94)'
+- cve: CVE-2025-12058
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.12.0
+  summary: Keras is vulnerable to arbitrary local file loading and Server-Side Request
+    Forgery
+  reference: https://osv.dev/vulnerability/GHSA-mq84-hjqx-cwf2
+  source: 'osv (cwe: CWE-502,CWE-918)'
+- cve: CVE-2025-12060
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.12.0
+  summary: Keras Directory Traversal Vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-hjqc-jx6g-rwp9
+  source: 'osv (cwe: CWE-22)'
+- cve: CVE-2025-1550
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: '>=3.0.0,<3.9.0'
+  summary: Arbitrary Code Execution via Crafted Keras Config for Model Loading
+  reference: https://osv.dev/vulnerability/GHSA-48g7-3x6r-xfhp
+  source: 'osv (cwe: CWE-94)'
+- cve: CVE-2025-49655
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: '>=3.11.0,<3.11.3'
+  summary: Keras framework vulnerable to deserialization of untrusted data
+  reference: https://osv.dev/vulnerability/GHSA-cvhh-q5g5-qprp
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2025-8747
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: '>=3.0.0,<3.11.0'
+  summary: Keras vulnerable to CVE-2025-1550 bypass via reuse of internal functionality
+  reference: https://osv.dev/vulnerability/GHSA-c9rc-mg46-23w3
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2025-9905
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: '>=3.0.0,<3.11.3'
+  summary: The Keras `Model.load_model` method **silently** ignores `safe_mode=True`
+    and allows arbitrary code execution when a `.h5`/`.hdf5` file is loaded.
+  reference: https://osv.dev/vulnerability/GHSA-36rr-ww3j-vrjv
+  source: 'osv (cwe: CWE-913)'
+- cve: CVE-2025-9906
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.11.0
+  summary: Keras is vulnerable to Deserialization of Untrusted Data
+  reference: https://osv.dev/vulnerability/GHSA-36fq-jgmw-4r9c
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-0897
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - '>=3.0.0,<3.12.1'
+  - '>=3.13.0,<3.13.2'
+  summary: Keras vulnerable to DoS via Malicious .keras Model (HDF5 Shape Bomb Causes
+    Petabyte Allocation in KerasFileEditor)
+  reference: https://osv.dev/vulnerability/GHSA-mgx6-5cf9-rr43
+  source: 'osv (cwe: CWE-770)'
+- cve: CVE-2026-11816
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.14.0
+  summary: Keras versions prior to 3.14.0 are vulnerable to a path traversal issue
+    in the archive extraction utilities located in `keras/src/utils/file_utils.py`.
+    The functions `filter_safe_tarinfos()` and `filter_safe_zipinfos()` validate
+    archive member paths against the process current working directory (CWD
+  reference: https://osv.dev/vulnerability/PYSEC-2026-2324
+  source: 'osv (keywords: path traversal,arbitrary file)'
+- cve: CVE-2026-1462
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.13.2
+  summary: Keras has an untrusted deserialization vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-4f3f-g24h-fr8m
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-1669
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - '>=3.13.0,<3.13.2'
+  - '>=3.0.0,<3.12.1'
+  summary: Keras has a Local File Disclosure via HDF5 External Storage During Keras
+    Weight Loading
+  reference: https://osv.dev/vulnerability/GHSA-3m4q-jmj6-r34q
+  source: 'osv (cwe: CWE-73)'
+- cve: CVE-2023-6730
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.36.0
+  summary: transformers has a Deserialization of Untrusted Data vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-3863-2447-669p
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2023-7018
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.36.0
+  summary: transformers has a Deserialization of Untrusted Data vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-v68g-wm8c-6x7j
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2024-11392
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.48.0
+  summary: Deserialization of Untrusted Data in Hugging Face Transformers
+  reference: https://osv.dev/vulnerability/GHSA-qxrp-vhvm-j765
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2024-11393
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.48.0
+  summary: Deserialization of Untrusted Data in Hugging Face Transformers
+  reference: https://osv.dev/vulnerability/GHSA-wrfc-pvp9-mr9g
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2024-11394
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.48.0
+  summary: Deserialization of Untrusted Data in Hugging Face Transformers
+  reference: https://osv.dev/vulnerability/GHSA-hxxf-235m-72v3
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2024-3568
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <4.38.0
+  summary: Transformers Deserialization of Untrusted Data vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-37q5-v5qm-c9v8
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-1839
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <5.0.0rc3
+  summary: HuggingFace Transformers allows for arbitrary code execution in the `Trainer`
+    class
+  reference: https://osv.dev/vulnerability/GHSA-69w3-r845-3855
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-4372
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <5.3.0
+  summary: HuggingFace transformers vulnerable to remote code execution
+  reference: https://osv.dev/vulnerability/GHSA-29pf-2h5f-8g72
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-5241
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <5.5.0
+  summary: 'huggingface/transformers: Arbitrary Code Execution During Model Initialization
+    in the LightGlue Model Loading Path'
+  reference: https://osv.dev/vulnerability/GHSA-fgcw-684q-jj6r
+  source: 'osv (keywords: model loading,arbitrary code,code execution)'

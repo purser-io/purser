@@ -10,7 +10,7 @@ CORE_IMAGE  := $(REGISTRY)$(IMAGE):$(TAG)
 HF_IMAGE    := $(REGISTRY)$(IMAGE)-hf:$(TAG)
 VERSION     := $(shell python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 
-.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest sigstore-trust-root
+.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest sigstore-trust-root loader-cves
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -47,6 +47,9 @@ licenses: sbom ## Regenerate THIRD_PARTY_LICENSES.md from the SBOMs
 
 base-digest: ## Print the current Wolfi base manifest digest (to update the pin)
 	@docker buildx imagetools inspect cgr.dev/chainguard/wolfi-base:latest --format '{{.Manifest.Digest}}'
+
+loader-cves: ## Refresh the vendored loader-CVE dataset from OSV.dev (model-scoped; network)
+	@python scripts/refresh_loader_cves.py
 
 sigstore-trust-root: ## Refresh the vendored Sigstore trust root (needs purser[sigstore] + network)
 	@python -c "from sigstore.models import ClientTrustConfig, DEFAULT_TUF_URL; \
