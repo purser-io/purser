@@ -8,6 +8,7 @@ the `purser` package exactly as it does in the CLI/API/admission webhook.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -45,12 +46,14 @@ def scan_upload(file) -> tuple[str, list[list[str]], str]:
     if file is None:
         return "Upload a model file first.", [], ""
     # Gradio stages uploads under the system temp dir; confine the scan to
-    # that staging area so a crafted path can't point the scanner elsewhere
-    # (same resolved-prefix guard as the REST API's scan-root confinement).
-    src = Path(file).resolve()
-    staging = Path(tempfile.gettempdir()).resolve()
-    if staging != src and staging not in src.parents:
+    # that staging area so a crafted path can't point the scanner elsewhere.
+    # realpath + startswith is the normalize-then-check guard (symlinks
+    # resolved before the prefix comparison).
+    staging = os.path.realpath(tempfile.gettempdir())
+    normalized = os.path.realpath(str(file))
+    if not normalized.startswith(staging + os.sep):
         return "Rejected: upload is outside the staging directory.", [], ""
+    src = Path(normalized)
     if not src.is_file():
         return "Upload not found.", [], ""
     if src.stat().st_size > MAX_UPLOAD_MB * 1024 * 1024:
