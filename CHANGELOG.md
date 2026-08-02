@@ -33,6 +33,19 @@ GitHub notes are generated automatically; this file is the curated summary.
   recorded as evidence. An upstream `safe` verdict never downgrades Purser's
   own analysis, and plain local scans remain fully offline
   (regression-tested). Honors `HF_ENDPOINT` and `HF_TOKEN`.
+- **Model-card / eval-attestation gate** (signal source `card-attestations`,
+  opt-in via `PURSER_CARD_ATTESTATIONS=1`) — the first `purser-eval` slice,
+  static by design. On hub scans it reads the declared model card and
+  `model-index` eval results and reports their *absence* (`CARD_MISSING`,
+  `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
+  (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
+  presence is deliberately not a finding and never improves a verdict.
+- **HuggingFace Space live demo** (`demo/hf-space/`, push-ready): Gradio app
+  running the real scanner + policy engine on uploads or Hub repos, with
+  upstream-verdict ingestion; deploy instructions in `DEPLOY.md`.
+- **Launch + foundation docs:** a control-plane launch-post draft
+  (`docs/launch-control-plane.md`) and a CNCF Sandbox application draft with
+  explicit readiness gates (`docs/cncf-sandbox-application.md`).
 - **Dataflow/taint analysis of bundled Python source.** A per-scope,
   intraprocedural taint pass catches trust-remote-code payloads assembled or
   resolved at runtime that a literal call-name match misses: a dangerous callable

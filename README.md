@@ -11,7 +11,7 @@ enforcement for ML model artifacts — from CI to Kubernetes admission.**
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-286%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-292%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
@@ -393,6 +393,7 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_SIGNALS` | `1` | `0`/`false` disables all external [signal sources](#signal-sources-upstream-intelligence). They only run on hub-fetched scans regardless. |
 | `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
+| `PURSER_CARD_ATTESTATIONS` | `0` | `1` enables the opt-in model-card / eval-attestation gate on hub scans. |
 | `PURSER_SCAN_ROOT` | `/models` | Path-scan confinement root. |
 | `PURSER_METRICS_ENABLED` | `1` | `0`/`false` disables the `/metrics` endpoint. |
 | `PURSER_AUDIT` | `off` | `stdout` or `syslog` to emit a JSON audit record per scan. |
@@ -594,6 +595,15 @@ Two rules keep this honest:
   already gated); plain local scans stay fully offline. If verdicts can't be
   fetched, the gap is visible as a `SIGNAL_UNAVAILABLE` finding rather than
   silently missing coverage.
+
+**Built-in: model-card / eval-attestation gate** (`card-attestations`,
+**opt-in**: `PURSER_CARD_ATTESTATIONS=1`). For organizations that want models
+to *document themselves*: on hub scans it checks the declared model card and
+`model-index` eval results and surfaces their **absence** as LOW findings
+(`CARD_MISSING`, `CARD_NO_EVAL_RESULTS`) — a WARN-level nudge by default that
+policy `rules:` can `ignore` or escalate to `deny` (undocumented model →
+`BLOCKED`). It gates the *attestation*, not the behavior: declared metrics are
+claims, not proof of safety, and presence of a card never improves a verdict.
 
 **Writing your own.** Third-party sources register via the `purser.signals`
 entry-point group — expose a zero-arg factory returning an object with

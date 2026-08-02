@@ -20,7 +20,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
 deploy-time admission enforcement, Sigstore verified-identity provenance, and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(286 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(292 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
@@ -130,7 +130,7 @@ intelligence and (b) **provenance/attestation** depth and interop.
 | **Known-bad denylist + refresh** | A first-class `denylist` policy dimension (SHA-256 hashes + publisher/repo globs), refreshable offline like AV signatures, **populated from** the sources above (HF `unsafe`, huntr → CVE, operator curation). The policy engine already has publisher/name blocklists (a `models` example even names `known-cve-model`); this generalizes it and adds content hashes. A genuine **open** malicious-model hash/IOC feed is a market gap Purser could help seed. |
 | **Signed AIBOM (model bill-of-materials)** | Extend the CycloneDX SBOM (today: the *package*) to a signed **model AIBOM** — files, hashes, formats, detected code surfaces, provenance/identity, verdict — as a cosign attestation. The static-provenance answer to W&B lineage (checksum/tamper-only, no signing) and to HiddenLayer's "AIBOM" marketing — but open and signed. |
 | **Provenance interop (W&B / registry)** | Read a W&B **Artifact manifest + digest + lineage DAG** (open-source SDK, no execution) as a provenance signal, and ship a **W&B Automations → webhook** gate recipe: scan on new version/alias, block promotion to a **protected alias** (`Production`) on FAIL. Generalizes to any registry with a promotion webhook. |
-| **Model-card / eval-attestation gate** | Static "visibility into bias/reliability" *without computing it*: a policy dimension that reads a declared eval/safety card (HF model card, an eval-results file, or a Seekr-style "Model Test Card" if present) and gates on **attested** claims (require a card; require declared eval coverage; block if a declared score is below a floor), cross-checking any hashes the card references against the actual files. Governs the *attestation*, not the model — keeps the never-execute guarantee. |
+| **Model-card / eval-attestation gate** — **SHIPPED (v1)** | Done as the opt-in `card-attestations` signal source (see *Planned — `purser-eval` companion* below): require-a-card and require-declared-eval-results gate via findings + policy rule overrides. Remaining refinements tracked there: score floors / coverage expressions (needs a policy dimension), hash cross-checks, non-HF card formats (eval-results files, Seekr-style test cards). |
 
 ## Planned — `purser-eval` companion (scoped; no code yet)
 
@@ -147,12 +147,13 @@ policy-tunable per rule like everything else.
 
 **Tractable first slices, in order:**
 
-1. **Model-card / eval-attestation gate (static — first).** Read *declared*
-   eval/safety results (HF model card metadata, an eval-results file), verify
-   any referenced artifact hashes, and let policy gate on **attestations**:
-   require a card, require declared eval coverage, block if a declared score
-   is under a floor. Governs the claim, not the behavior — keeps the
-   never-execute guarantee, needs no new infrastructure.
+1. **Model-card / eval-attestation gate (static — first). SHIPPED** as the
+   opt-in `card-attestations` signal source (`PURSER_CARD_ATTESTATIONS=1`):
+   absence of a model card or of declared `model-index` eval results
+   surfaces as LOW findings that policy rules can `ignore` or escalate to
+   `deny`. Governs the claim, not the behavior. Remaining refinements:
+   score floors / required-coverage expressions (needs a policy dimension),
+   and cross-checking hashes a card references against the actual files.
 2. **Wrap existing OSS eval/red-team tooling.** Adapters that run e.g.
    `garak` LLM probes *in the eval companion's own sandbox* and translate
    results into findings behind the same interface. Purser orchestrates and

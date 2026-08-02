@@ -350,3 +350,76 @@ def test_policy_rule_override_applies_to_signal_findings(monkeypatch, tmp_path):
                          signal_context=HF_CTX)
     assert report.signal_findings == []
     assert report.verdict == Verdict.PASS
+
+
+# -- card-attestations source (purser-eval slice 1) ------------------------------
+
+from purser.signals.card_attestations import CardAttestationsSource  # noqa: E402
+
+
+def patch_model_api(monkeypatch, body: dict):
+    monkeypatch.setattr(
+        "purser.signals.card_attestations.urllib.request.urlopen",
+        lambda req, timeout=0: FakeResponse(body))
+
+
+def test_card_source_is_opt_in(monkeypatch):
+    src = CardAttestationsSource()
+    assert not src.available(HF_CTX)          # off by default
+    monkeypatch.setenv("PURSER_CARD_ATTESTATIONS", "1")
+    assert src.available(HF_CTX)
+    assert not src.available(SignalContext(target=Path(".")))  # hub scans only
+
+
+def test_card_missing(monkeypatch):
+    patch_model_api(monkeypatch, {"cardData": None, "siblings": [
+        {"rfilename": "model.safetensors"}]})
+    (f,) = CardAttestationsSource().collect(HF_CTX)
+    assert f.rule_id == "CARD_MISSING"
+    assert f.severity == Severity.LOW
+    assert "attestation" in f.tags
+
+
+def test_card_without_eval_results(monkeypatch):
+    patch_model_api(monkeypatch, {
+        "cardData": {"license": "apache-2.0"},
+        "siblings": [{"rfilename": "README.md"}]})
+    (f,) = CardAttestationsSource().collect(HF_CTX)
+    assert f.rule_id == "CARD_NO_EVAL_RESULTS"
+
+
+def test_card_with_declared_evals_is_silent(monkeypatch):
+    patch_model_api(monkeypatch, {
+        "cardData": {"model-index": [{"name": "m", "results": [
+            {"task": {"type": "text-classification"},
+             "metrics": [{"type": "accuracy", "value": 0.91}]}]}]},
+        "siblings": [{"rfilename": "README.md"}]})
+    assert CardAttestationsSource().collect(HF_CTX) == []
+
+
+def test_card_fetch_failure_is_coverage_gap(monkeypatch):
+    def boom(req, timeout=0):
+        raise urllib.error.URLError("nope")
+
+    monkeypatch.setattr(
+        "purser.signals.card_attestations.urllib.request.urlopen", boom)
+    fs = CardAttestationsSource().collect(HF_CTX)
+    assert rules(fs) == {"SIGNAL_UNAVAILABLE"}
+
+
+def test_policy_can_deny_undocumented_models(monkeypatch, tmp_path):
+    """The attestation gate escalates via normal rule overrides."""
+    from purser.core.policy import Policy
+
+    monkeypatch.setenv("PURSER_CARD_ATTESTATIONS", "1")
+    patch_model_api(monkeypatch, {"cardData": None, "siblings": []})
+    # hf-verdicts would also fire; isolate the card source for this test
+    monkeypatch.setenv("PURSER_SIGNAL_HF_VERDICTS", "0")
+    write_safetensors(tmp_path)
+    pol_yaml = tmp_path / "pol.yaml"
+    pol_yaml.write_text(
+        "version: 1\nname: attested-only\nfail_on: {severity: HIGH}\n"
+        "rules:\n  - {id: CARD_MISSING, action: deny}\n")
+    report = scan_target(tmp_path, policy=Policy.load(str(pol_yaml)),
+                         signal_context=HF_CTX)
+    assert report.verdict == Verdict.BLOCKED
