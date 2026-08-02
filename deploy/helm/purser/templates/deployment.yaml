@@ -25,7 +25,9 @@ spec:
         {{- include "purser.podAnnotations" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "purser.serviceAccountName" . }}
-      automountServiceAccountToken: false
+      # The SA token is only needed (and only mounted) when auto-approval
+      # writes the approvals ConfigMap through the Kubernetes API.
+      automountServiceAccountToken: {{ and .Values.admission.enabled .Values.admission.autoApprove.enabled }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

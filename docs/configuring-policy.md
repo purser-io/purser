@@ -186,14 +186,15 @@ rules:
 
 **Signal findings tune the same way.** Findings from
 [signal sources](../README.md#signal-sources-upstream-intelligence) — external
-intelligence gathered on `hf://` scans — go through the same `rules:` overrides:
+intelligence about the model — go through the same `rules:` overrides:
 
 | Finding ID | Comes from | Default |
 |---|---|---|
-| `HF_UPSTREAM_UNSAFE` | HuggingFace's own scanners flagged a file | HIGH (fails) |
-| `HF_UPSTREAM_SUSPICIOUS` | upstream "caution"-level flag | MEDIUM |
+| `HF_UPSTREAM_UNSAFE` | HuggingFace's own scanners flagged a file *(`hf://` scans)* | HIGH (fails) |
+| `HF_UPSTREAM_SUSPICIOUS` | upstream "caution"-level flag *(`hf://` scans)* | MEDIUM |
 | `CARD_MISSING` | model has no model card *(needs `PURSER_CARD_ATTESTATIONS=1`)* | LOW |
 | `CARD_NO_EVAL_RESULTS` | card declares no eval results *(same opt-in)* | LOW |
+| `LOADER_CVE` | the artifact declares a framework version with a known load-time CVE *(offline; any scan)* | LOW |
 | `SIGNAL_UNAVAILABLE` | a signal couldn't be fetched (coverage gap) | LOW |
 
 For example, to **require documented models** — block anything without a model
@@ -204,6 +205,28 @@ rules:
   - id: CARD_MISSING
     action: deny
 ```
+
+### 9. Known-bad list — `denylist`
+
+Block specific *things you already know are bad*, regardless of what the scan
+finds: exact file contents (SHA-256), publishers, or model names. Any match is
+always **BLOCKED**.
+
+```yaml
+denylist:
+  hashes:                     # exact file-content digests
+    - "sha256:0123abcd…"      #   (64 hex chars; sha256: prefix optional)
+  publishers: ["evil-*"]      # publisher patterns
+  models: ["*/nullif-ai*"]    # model/repo name patterns
+  files:                      # extra hash lists in separate files —
+    - /feeds/known-bad.txt    #   one digest per line, `#` comments OK
+```
+
+The `files:` entries are re-read **every scan**, so you can refresh a shared
+known-bad list (like antivirus signatures) without touching the policy: drop
+in the new file and the next scan uses it. Good sources to populate it from:
+Hugging Face `unsafe` verdicts you've confirmed, incident response, or your
+security team's curation.
 
 ---
 
@@ -217,7 +240,7 @@ Your policy produces one **verdict**, which also sets the command's exit code
 | PASS | No concerns. | 0 |
 | WARN | Minor findings only. | 0 |
 | FAIL | A finding at/above your `fail_on` severity. | 1 |
-| BLOCKED | A rule rejected it — format / origin / publisher / name / signing / identity, or a `rules:` entry with `action: deny`. | 2 |
+| BLOCKED | A rule rejected it — format / origin / publisher / name / signing / identity / denylist, or a `rules:` entry with `action: deny`. | 2 |
 | ERROR | Couldn't scan (bad path, etc.). | 3 |
 
 ---
@@ -310,6 +333,12 @@ identity:                    # verified Sigstore signer identity
 models:
   mode: blocklist            # off | allowlist | blocklist
   patterns: ["evilcorp/*"]   # glob, case-insensitive
+
+denylist:                    # known-bad list — any match is BLOCKED
+  hashes: []                 # exact file SHA-256s ("sha256:" prefix optional)
+  publishers: []             # publisher globs
+  models: []                 # model/repo name globs
+  files: []                  # external hash-list files, re-read every scan
 
 max_file_size_mb: 0          # 0 = unlimited
 

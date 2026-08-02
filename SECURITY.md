@@ -75,6 +75,16 @@ used as a gate — in CI, over the API, and at Kubernetes admission.
    namespace; its TLS cert/CA bundle are chart-managed. Fail-closed trades
    availability for integrity: an outage blocks opted-in deploys rather than
    waving them through.
+6. *Verdict → approval store (auto-approval, opt-in).* With
+   `PURSER_AUTO_APPROVE=1`, a scan verdict **writes** the approved-digest list
+   the webhook enforces — which makes the scanning service an *approval
+   authority*: compromising it (or feeding it a payload its static analysis
+   misses) yields a deployable digest. Mitigations: off by default; only
+   verdicts in `PURSER_AUTO_APPROVE_VERDICTS` approve while FAIL/BLOCKED
+   actively revokes; the in-cluster grant is a namespaced Role on the single
+   approvals ConfigMap (never a ClusterRole); and every action is recorded in
+   `metadata.approvals` + the audit log. Treat auto-approval as a policy
+   decision: keep it off where a human review step is the point.
 
 **Primary guarantee — models are never executed or extracted:**
 - Pickle streams are parsed statically with `pickletools.genops`
@@ -183,6 +193,11 @@ Secret.
 - [ ] If you enable the admission webhook, keep `failurePolicy: Fail` and
   scope the namespace selector deliberately — `Ignore` converts webhook
   downtime into a silent policy bypass.
+- [ ] Leave auto-approval (`PURSER_AUTO_APPROVE`) **off** unless the
+  scan-to-deploy flow is meant to be fully automatic; when on, keep the
+  approve set to `PASS` only, monitor `metadata.approvals` in the audit log,
+  and remember the scanner becomes an approval authority (see trust
+  boundary 6).
 - [ ] Use a `require_signed` policy (`policies/signed-only.yaml`) and a curated
   trust store for provenance enforcement.
 - [ ] Refresh the pinned Wolfi digest on a cadence (`make base-digest`) and gate
