@@ -32,7 +32,48 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
 
 ## Recommended next (priority order)
 
-1. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
+Re-sequenced for the control-plane pivot (2026-08-02). The ordering logic:
+ship the pivot so anyone can see it (#1), make the control-plane claim
+literally true in a cluster (#2), prove the aggregation thesis with a second
+real intel signal (#3), then convert the resulting momentum into foundation
+standing (#4 — its gates are *outputs* of #1). Detection-depth residuals are
+deliberately held behind all four: the pivot's core argument is that Purser
+orchestrates detection rather than competing on it.
+
+1. **Ship & launch the pivot.** Merge the pivot branch, cut **v0.3.0** (the
+   release that carries the repositioning + `purser.signals` to PyPI/GHCR),
+   push the prepared HF **Space** (`demo/hf-space/`, needs the maintainer's HF
+   account), and publish the launch post
+   ([`docs/launch-control-plane.md`](docs/launch-control-plane.md)). The
+   strategy is explicit that distribution matters as much as features — and
+   every later item (adopters, second maintainer, CNCF) compounds on this one.
+
+2. **Close the enforcement loop (admission-webhook depth).** Today the
+   scan→approve→admit chain has a manual hop: an operator hand-maintains the
+   approved-model-digest ConfigMap. Build the controller that **auto-populates
+   approvals from scan verdicts** (PASS → digest admitted, revocation on
+   re-scan), and optionally verify **cosign attestations** instead of a digest
+   allowlist — connecting the provenance layer to the enforcement layer. This
+   is the difference between *claiming* a control plane and *being* one.
+
+3. **Prove aggregation with a second real intel signal.**
+   - **Loader-CVE mapping (OSV/GHSA)** as an **offline** signal source — maps
+     detected format + declared framework version to known load-time RCEs
+     (details in the candidates table below). Needs no network at scan time,
+     so it also breaks the "signals are `-hf`-only" limitation; no OSS peer
+     has it.
+   - Then the **known-bad denylist** policy dimension (hash/publisher
+     denylists refreshable like AV signatures — could seed the open
+     malicious-model feed that doesn't exist yet) and cheap **MITRE ATLAS
+     tagging** for reviewer credibility.
+   - Small operability items that are really *adoption friction* on this same
+     path get pulled along: verdict-lookup caching by commit sha, and the
+     exfil-latency work (a gate that adds ~20 s per large model in CI is
+     friction on the product's main path; its fix — scan only structural
+     regions of known formats — is also the prerequisite for the
+     packed-binary-C2 residual).
+
+4. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
    Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`).
    - **OpenSSF Best Practices badge — EARNED (passing).** Project
      [13900](https://www.bestpractices.dev/projects/13900) is at **100% / passing**;
@@ -69,6 +110,8 @@ undecided) · **deferred** (chosen not to do yet) · **out-of-scope**.
        path: governance docs ship and the OpenSSF badge is earned — remaining is
        to land a second maintainer + a couple of named
        adopters to clear the TOC's single-vendor / early-stage bar, and apply.
+       Those two gates are what item **#1** (the launch) is designed to
+       produce — which is why this sequences after it.
    - **CNCF Landscape entry** (the *catalog* — not project hosting) — prepared
      ([`docs/cncf-landscape-entry.md`](docs/cncf-landscape-entry.md)) but deferred:
      its lighter bar (traction ≈ ≥300 stars + a backing org/Crunchbase) isn't met
@@ -102,6 +145,12 @@ it is **out of scope** for a scanner that never loads the model.)*
 
 ## Candidates — detection depth
 
+**Deliberately deprioritized** behind the aggregation/enforcement work in
+*Recommended next*: post-pivot, the scanner is one signal, and competing on
+raw detection depth is the losing game the strategy explicitly avoids. These
+stay tracked because the built-in signal still needs maintenance — not
+because they lead.
+
 | Item | Notes |
 |---|---|
 | Per-format op/custom-code depth | **Shipped** for every format where static analysis is feasible: pickle opcodes, Keras (incl. non-`Lambda` custom layers), ONNX, TF SavedModel (exec + host-I/O ops), TFLite, GGUF, Paddle (`py_func`), CoreML (`CustomModel` + custom layers), and OpenVINO IR. TensorRT/MXNet stay format-ID + exfil. The one thing left — `declared`-vs-`reachable` dataflow — is **out of scope** (see below). |
@@ -126,10 +175,10 @@ intelligence and (b) **provenance/attestation** depth and interop.
 
 | Item | Notes |
 |---|---|
-| **Upstream scan-verdict enrichment — remaining refinement** | The ingestion itself **shipped** (see *Recently shipped*: `purser.signals`, source `hf-verdicts`). Left here: **cache verdict lookups by commit sha** (one call/repo/revision today, no cross-scan cache). |
-| **Loader-CVE mapping (OSV/GHSA, offline)** | No feed of malicious *models* exists, but framework/parser CVEs do: map a detected format + declared version to known load-time RCEs (`.keras`/`.h5` CVE-2025-9906/-9905 `safe_mode` bypass, Keras Lambda CVE-2024-3660, llama.cpp GGUF parser CVEs; CWE-502 class). Ingest bulk **OSV-JSON** (`ossf/osv-schema`, CC-BY-4.0) or the GHSA mirror **offline**; emit "load-unsafe under `<framework> <version>`". Also flags OSV `MAL-` malicious-*package* records against bundled deps. |
-| **MITRE ATLAS technique tagging** | Tag findings with `AML.T####` IDs from `mitre-atlas/atlas-data` (YAML / STIX 2.1, free, monthly). Enrichment/credibility only — not a signature source. Cheap to ingest; aligns reports with the framework reviewers expect. |
-| **Known-bad denylist + refresh** | A first-class `denylist` policy dimension (SHA-256 hashes + publisher/repo globs), refreshable offline like AV signatures, **populated from** the sources above (HF `unsafe`, huntr → CVE, operator curation). The policy engine already has publisher/name blocklists (a `models` example even names `known-cve-model`); this generalizes it and adds content hashes. A genuine **open** malicious-model hash/IOC feed is a market gap Purser could help seed. |
+| **Upstream scan-verdict enrichment — remaining refinement** *(pulled into Recommended next #3)* | The ingestion itself **shipped** (see *Recently shipped*: `purser.signals`, source `hf-verdicts`). Left here: **cache verdict lookups by commit sha** (one call/repo/revision today, no cross-scan cache). |
+| **Loader-CVE mapping (OSV/GHSA, offline)** — **promoted to Recommended next #3** | No feed of malicious *models* exists, but framework/parser CVEs do: map a detected format + declared version to known load-time RCEs (`.keras`/`.h5` CVE-2025-9906/-9905 `safe_mode` bypass, Keras Lambda CVE-2024-3660, llama.cpp GGUF parser CVEs; CWE-502 class). Ingest bulk **OSV-JSON** (`ossf/osv-schema`, CC-BY-4.0) or the GHSA mirror **offline**; emit "load-unsafe under `<framework> <version>`". Also flags OSV `MAL-` malicious-*package* records against bundled deps. Build as a `purser.signals` source — offline, so it also breaks the signals-are-hub-only limitation. |
+| **MITRE ATLAS technique tagging** *(pulled into Recommended next #3)* | Tag findings with `AML.T####` IDs from `mitre-atlas/atlas-data` (YAML / STIX 2.1, free, monthly). Enrichment/credibility only — not a signature source. Cheap to ingest; aligns reports with the framework reviewers expect. |
+| **Known-bad denylist + refresh** *(pulled into Recommended next #3)* | A first-class `denylist` policy dimension (SHA-256 hashes + publisher/repo globs), refreshable offline like AV signatures, **populated from** the sources above (HF `unsafe`, huntr → CVE, operator curation). The policy engine already has publisher/name blocklists (a `models` example even names `known-cve-model`); this generalizes it and adds content hashes. A genuine **open** malicious-model hash/IOC feed is a market gap Purser could help seed. |
 | **Signed AIBOM (model bill-of-materials)** | Extend the CycloneDX SBOM (today: the *package*) to a signed **model AIBOM** — files, hashes, formats, detected code surfaces, provenance/identity, verdict — as a cosign attestation. The static-provenance answer to W&B lineage (checksum/tamper-only, no signing) and to HiddenLayer's "AIBOM" marketing — but open and signed. |
 | **Provenance interop (W&B / registry)** | Read a W&B **Artifact manifest + digest + lineage DAG** (open-source SDK, no execution) as a provenance signal, and ship a **W&B Automations → webhook** gate recipe: scan on new version/alias, block promotion to a **protected alias** (`Production`) on FAIL. Generalizes to any registry with a promotion webhook. |
 | **Model-card / eval-attestation gate — remaining refinements** | The v1 gate **shipped** (see *Recently shipped* and *Planned — `purser-eval` companion*: opt-in `card-attestations` source). Left here: **score floors / coverage expressions** (needs a policy dimension), **hash cross-checks** of card-referenced files, non-HF card formats (eval-results files, Seekr-style test cards). |
@@ -174,13 +223,13 @@ heuristic second opinion, never a soundness gate.
 | Item | Notes |
 |---|---|
 | Global memory accountant | Per-scan windowing + finding cap + concurrency cap bound memory in practice; a cross-request budget would be stricter. |
-| Exfil scan latency on huge models | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats, or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
+| Exfil scan latency on huge models *(pulled into Recommended next #3 — post-pivot this is adoption friction on the gate's main path, not polish)* | A multi-hundred-MB weight file still takes ~20 s. Cost (profiled) is per-string iteration over the ~millions of printable runs weight data yields, not the regexes. **Done:** length-gate the secret (>=14) / encoded (>=64) heuristics in `scanners/exfil.py` (~30% win, no detection change). **Avoid:** a buffer-wide regex rewrite — non-anchored patterns (IP:port, code/secret alternations, `{64,}` encoded) backtrack over the full binary and made it ~2x slower. **Next:** scan only structural/metadata regions of known formats (also the prerequisite for the packed-binary-C2 residual), or lower the default per-file byte cap (`PURSER_MAX_SCAN_MB`). |
 
 ## Candidates — distribution / UX
 
 | Item | Notes |
 |---|---|
-| Admission-webhook depth | The `ValidatingAdmissionWebhook` (shipped) enforces image-digest pinning + approved-model digests at deploy time. Next: a controller that *populates* the approved-digest set automatically from scan results (today it is operator-managed via the ConfigMap / GitOps), and optional cosign attestation verification instead of a digest allowlist. |
+| Admission-webhook depth — **promoted to Recommended next #2** | The `ValidatingAdmissionWebhook` (shipped) enforces image-digest pinning + approved-model digests at deploy time. Next: a controller that *populates* the approved-digest set automatically from scan results (today it is operator-managed via the ConfigMap / GitOps), and optional cosign attestation verification instead of a digest allowlist — the piece that closes the scan→approve→admit loop. |
 
 ## Out of scope
 
