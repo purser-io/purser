@@ -23,7 +23,8 @@ from purser.core.signing import (
     write_signature,
 )
 
-app = typer.Typer(help="Purser — ML model security scanner with policy controls.",
+app = typer.Typer(help="Purser — model supply-chain control plane: scan, verify "
+                       "provenance, and enforce policy over ML model artifacts.",
                   no_args_is_help=True)
 console = Console(stderr=False)
 

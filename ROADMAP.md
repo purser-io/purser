@@ -1,5 +1,14 @@
 # Purser Roadmap
 
+**North star: the open-source model supply-chain control plane.** One policy +
+provenance + enforcement plane that ingests signals from many analyzers —
+Purser's own static scanner, the `purser-deep` companion, verified
+signatures/identity, and upstream/third-party intelligence — and renders a
+single verdict it enforces in CI and at Kubernetes admission. The scanner is
+one input; the control plane (policy, provenance, enforcement, signal
+aggregation) is the product. Detection depth still matters, but Purser
+*orchestrates* detection rather than competing on it alone.
+
 Forward-looking work. Competitive positioning is in the
 [comparison chart](README.md#how-purser-compares); shipped history is in
 [`CHANGELOG.md`](CHANGELOG.md). This file tracks what is **not done yet** and why.

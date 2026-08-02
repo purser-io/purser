@@ -60,7 +60,8 @@ MAX_UPLOAD_BYTES = int(env_get("MAX_UPLOAD_MB", "10240")) * 1024 * 1024
 MAX_CONCURRENT_SCANS = int(env_get("MAX_CONCURRENT_SCANS", "4"))
 
 app = FastAPI(title="Purser", version=__version__,
-              description="ML model security scanner with policy-based controls")
+              description="Model supply-chain control plane: policy, provenance, "
+                          "and enforcement for ML model artifacts")
 
 # Bounded concurrency: reject rather than queue so a flood of large uploads
 # can't exhaust memory/disk. Non-blocking acquire -> HTTP 429 when full.

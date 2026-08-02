@@ -4,7 +4,8 @@
 
 # Purser
 
-**ML model security scanner with policy-based supply-chain controls.**
+**The open-source model supply-chain control plane: policy, provenance, and
+enforcement for ML model artifacts — from CI to Kubernetes admission.**
 
 [![CI](https://github.com/purser-io/purser/actions/workflows/ci.yml/badge.svg)](https://github.com/purser-io/purser/actions/workflows/ci.yml)
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -17,17 +18,31 @@
 
 </div>
 
-Purser statically scans machine-learning model artifacts for malicious
-code and data-exfiltration indicators — taking the best-of-breed techniques
-from open-source scanners (modelscan, picklescan) and extending them — and
-enforces **user-defined policies**: restrict models by **country of origin**,
-**publisher**, **name**, or **model format/type**. Ships as a CLI, a REST API,
-container images, and Kubernetes manifests.
+Purser is the **clearance desk** for models entering your environment: it
+gathers signals about a model artifact, evaluates them against a
+**user-defined policy**, and renders one verdict — `PASS` / `WARN` / `FAIL` /
+`BLOCKED` — that it **enforces in CI and at Kubernetes admission**. Policy can
+restrict models by **country of origin**, **publisher**, **name**, **model
+format/type**, or **signer identity**, and require verified provenance
+(`require_signed`). Ships as a CLI, a REST API, container images, a Helm
+chart, and a `ValidatingAdmissionWebhook`.
 
-Nothing is ever deserialized or executed: all analysis is byte- and
-opcode-level. Format is detected by **content (magic bytes), not the filename**,
-so renaming a payload to a benign-looking extension doesn't evade the scan — a
-pickle disguised as `model.onnx`, or hidden under a `README.md`, is still caught.
+Scanning is one *input* to that verdict, not the product. Signals feeding the
+policy engine today:
+
+- a built-in **static scanner** — malicious code and data-exfiltration
+  indicators across ~35 model formats, taking the best-of-breed techniques
+  from open-source scanners (modelscan, picklescan) and extending them;
+- **verified provenance** — Ed25519 model signing with a trust store and
+  revocation, plus offline **Sigstore** (Fulcio/Rekor) identity verification;
+- the optional **deep-analysis companion** (`purser-deep`) — pickle
+  gadget-chain heuristics and weight tampering/steganography.
+
+The core never loads a model: nothing is deserialized or executed, all
+analysis is byte- and opcode-level. Format is detected by **content (magic
+bytes), not the filename**, so renaming a payload to a benign-looking
+extension doesn't evade the scan — a pickle disguised as `model.onnx`, or
+hidden under a `README.md`, is still caught.
 
 > [!TIP]
 > **New here?** Start with the plain-language [user guides](docs/): one for
