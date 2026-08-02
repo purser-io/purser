@@ -15,6 +15,7 @@ from purser.core.hf import HFNotAvailable, download_repo, parse_hf_uri
 from purser.core.policy import Policy, PolicyError
 from purser.core.provenance import origin_db
 from purser.core.scanner import EXIT_CODES, scan_target
+from purser.signals import SignalContext
 from purser.core.signing import (
     SigningError,
     generate_keypair,
@@ -176,8 +177,13 @@ def scan(
             console.print(f"[bold red]Download failed:[/] {exc}")
             raise typer.Exit(3)
 
+    signal_ctx = None
+    if hf_repo is not None:
+        signal_ctx = SignalContext(repo_id=hf_repo, revision=revision,
+                                   source="huggingface")
     report = scan_target(local_target, policy=pol, origin=origin,
-                         publisher=publisher, repo_id=repo_id)
+                         publisher=publisher, repo_id=repo_id,
+                         signal_context=signal_ctx)
     if hf_repo is not None:
         report.target = target
     _emit(report, fmt, output)

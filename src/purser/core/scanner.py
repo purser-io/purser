@@ -17,6 +17,7 @@ from purser.core.provenance import resolve as resolve_provenance
 from purser.core.sigstore_verify import IdentityResult
 from purser.core.sigstore_verify import verify as verify_sigstore
 from purser.core.signing import VerificationResult, verify_target
+from purser.signals import SignalContext, collect_signals
 
 
 def _signature_findings(result: VerificationResult) -> list[Finding]:
@@ -120,8 +121,14 @@ def scan_target(
     origin: str | None = None,
     publisher: str | None = None,
     repo_id: str | None = None,
+    signal_context: "SignalContext | None" = None,
 ) -> ScanReport:
-    """Scan a file or directory and evaluate the policy over the results."""
+    """Scan a file or directory and evaluate the policy over the results.
+
+    `signal_context` (where the artifact came from — hub, repo id, revision)
+    opts the scan into external signal sources (`purser.signals`); local scans
+    pass nothing and stay fully offline.
+    """
     target = Path(target)
     policy = policy or Policy.default()
     started = time.monotonic()
@@ -214,6 +221,14 @@ def scan_target(
                     f.file = f.file or fr.path
                     report.deep_findings.append(f)
         report.metadata["deep_analysis"] = True
+
+    # External signal sources (upstream verdicts, plugins) — only when the
+    # caller says where the artifact came from; never for plain local scans.
+    if signal_context is not None:
+        ctx = signal_context
+        if ctx.target is None:
+            ctx.target = target
+        report.signal_findings = collect_signals(ctx)
 
     report = policy.evaluate(report)
     report.duration_seconds = time.monotonic() - started

@@ -1,4 +1,4 @@
-# ModelGuard default policy: block on HIGH+ content findings, warn on
+# Purser default policy: block on HIGH+ content findings, warn on
 # unknown origin, no format or country restrictions.
 version: 1
 name: default

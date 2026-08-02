@@ -55,6 +55,7 @@ from purser.core.hf import HFNotAvailable, download_repo
 from purser.core.policy import Policy, PolicyError
 from purser.core.provenance import origin_db
 from purser.core.scanner import scan_target
+from purser.signals import SignalContext
 
 MAX_UPLOAD_BYTES = int(env_get("MAX_UPLOAD_MB", "10240")) * 1024 * 1024
 MAX_CONCURRENT_SCANS = int(env_get("MAX_CONCURRENT_SCANS", "4"))
@@ -295,8 +296,13 @@ def scan_hf(req: HFScanRequest, _: None = Depends(require_auth),
             local = download_repo(req.repo_id, revision=req.revision,
                                   token=os.environ.get("HF_TOKEN"))
             try:
-                report = scan_target(local, policy=get_policy(), origin=req.origin,
-                                     repo_id=req.repo_id)
+                report = scan_target(
+                    local, policy=get_policy(), origin=req.origin,
+                    repo_id=req.repo_id,
+                    signal_context=SignalContext(
+                        repo_id=req.repo_id, revision=req.revision,
+                        source="huggingface"),
+                )
                 report.target = f"hf://{req.repo_id}"
                 return report.to_dict()
             finally:

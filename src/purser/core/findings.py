@@ -91,6 +91,7 @@ class ScanReport:
     policy_findings: list[Finding] = field(default_factory=list)
     signature_findings: list[Finding] = field(default_factory=list)
     deep_findings: list[Finding] = field(default_factory=list)
+    signal_findings: list[Finding] = field(default_factory=list)
     verdict: Verdict = Verdict.PASS
     policy_name: str = ""
     origin: str | None = None
@@ -102,7 +103,8 @@ class ScanReport:
 
     @property
     def all_findings(self) -> list[Finding]:
-        out = list(self.policy_findings) + list(self.signature_findings) + list(self.deep_findings)
+        out = (list(self.policy_findings) + list(self.signature_findings)
+               + list(self.deep_findings) + list(self.signal_findings))
         for fr in self.files:
             out.extend(fr.findings)
         return out
@@ -132,6 +134,7 @@ class ScanReport:
             "policy_findings": [f.to_dict() for f in self.policy_findings],
             "signature_findings": [f.to_dict() for f in self.signature_findings],
             "deep_findings": [f.to_dict() for f in self.deep_findings],
+            "signal_findings": [f.to_dict() for f in self.signal_findings],
             "files": [fr.to_dict() for fr in self.files],
             "metadata": self.metadata,
             "started_at": self.started_at,

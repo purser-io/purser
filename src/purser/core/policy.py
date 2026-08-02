@@ -353,6 +353,7 @@ class Policy:
             fr.findings = apply_overrides(fr.findings)
         report.signature_findings = apply_overrides(report.signature_findings)
         report.deep_findings = apply_overrides(report.deep_findings)
+        report.signal_findings = apply_overrides(report.signal_findings)
 
         report.policy_findings = policy_findings
         report.policy_name = self.name
