@@ -438,7 +438,9 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
 | `PURSER_SIGNAL_CACHE_TTL` | `300` | Seconds to cache hub verdict lookups for mutable refs (`main`); a 40-hex commit-sha revision caches for the process lifetime. `0` disables. Failures are never cached. |
 | `PURSER_ATLAS` | `1` | `0` disables [MITRE ATLAS](https://atlas.mitre.org) technique tags (`atlas:AML.T####`) appended to findings. |
-| `PURSER_LOADER_CVES` | *(vendored)* | Path to a loader-CVE dataset that replaces the vendored one — refresh intel without upgrading (`make loader-cves` regenerates from OSV.dev). |
+| `PURSER_LOADER_CVES` | *(vendored)* | Path to a loader-CVE dataset that replaces both the vendored one and any `update-intel` copy — full operator control (air-gap distribution). |
+| `PURSER_INTEL_URL` | *(project repo)* | URL `purser update-intel` fetches the dataset from — point at an internal mirror. |
+| `PURSER_INTEL_DIR` | `~/.purser` | Where `update-intel` installs the dataset (scans prefer it over the vendored copy). |
 | `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
 | `PURSER_AUTO_APPROVE` | `0` | `1` auto-populates the admission webhook's approved-digest list from verdicts: verdicts in `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's sha256; FAIL/BLOCKED revokes. |
 | `PURSER_APPROVALS_PATH` | *(unset)* | File backend for auto-approval (the exact format the webhook reads — commit/sync it into the ConfigMap via GitOps). |
@@ -673,6 +675,23 @@ on drift). Operators can point `PURSER_LOADER_CVES=/path/dataset.yaml` at a
 fresher copy without upgrading. It fires only on a declared in-range
 version — never as blanket per-format noise — and says plainly that the
 *loader* is what's exposed, not that the artifact is malicious.
+
+**Staying updated (end users).** The vendored dataset is frozen at release
+time; refresh it *without upgrading Purser*:
+
+```bash
+purser update-intel            # fetch + validate + install to ~/.purser/
+purser update-intel --check    # show the active dataset's source and age
+```
+
+Scans **never** fetch — this command is the only network path, the fetched
+file is schema-validated before install (a bad fetch leaves the previous
+dataset in place), and scans prefer the updated file automatically
+(`PURSER_LOADER_CVES` env → `~/.purser/` → vendored). When the active dataset
+is >90 days old, table-format scans print a one-line hint. Air-gapped: point
+`PURSER_INTEL_URL` at an internal mirror, or distribute the file yourself via
+`PURSER_LOADER_CVES` (in Kubernetes, a mounted ConfigMap). Run
+`purser update-intel` on a cron/CI schedule for a fleet.
 
 **Writing your own.** Third-party sources register via the `purser.signals`
 entry-point group — expose a zero-arg factory returning an object with

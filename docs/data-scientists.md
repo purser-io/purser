@@ -107,7 +107,10 @@ A LOW `SIGNAL_UNAVAILABLE` finding just means that lookup couldn't be made
 You may also see a LOW `LOADER_CVE` finding on any scan: the model file
 declares the framework version that made it (e.g. an old Keras), and that
 version's *loader* has a known security bug. The file isn't malicious because
-of this — it's a heads-up to load it with a patched framework version.
+of this — it's a heads-up to load it with a patched framework version (the
+finding tells you which version clears everything). To keep that CVE
+knowledge current without reinstalling Purser, run `purser update-intel`
+once in a while — Purser will remind you when it's more than ~3 months old.
 
 ---
 

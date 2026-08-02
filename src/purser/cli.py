@@ -195,6 +195,9 @@ def scan(
     if hf_repo is not None:
         report.target = target
     _emit(report, fmt, output)
+    from purser.core.intel import staleness_hint
+    if fmt == "table" and (hint := staleness_hint()):
+        console.print(f"[dim]{hint}[/]")
     raise typer.Exit(EXIT_CODES[report.verdict])
 
 
@@ -293,6 +296,43 @@ def verify(
         console.print(f"  identity: {ident.identity}")
 
     raise typer.Exit(0 if (result.verified or ident.verified) else 1)
+
+
+@app.command("update-intel")
+def update_intel(
+    url: str = typer.Option(None, "--url", help="Dataset URL (default: the project repo; PURSER_INTEL_URL overrides)"),
+    check: bool = typer.Option(False, "--check", help="Show the active dataset's source/age without fetching"),
+):
+    """Refresh the loader-CVE intel dataset without upgrading Purser.
+
+    Fetches the latest model-scoped dataset over HTTPS, validates it, and
+    installs it to ~/.purser/ where scans prefer it over the vendored copy.
+    Scans themselves never fetch — this command is the only network path.
+    Air-gapped: set PURSER_INTEL_URL to an internal mirror, or drop a file
+    via PURSER_LOADER_CVES."""
+    from purser.core import intel
+
+    if check:
+        source, text = intel.active_dataset()
+        stamp = intel.refreshed_on(text)
+        entries = len(intel.validate_dataset(text))
+        console.print(f"Active dataset: [bold]{source}[/] · {entries} entries "
+                      f"· refreshed {stamp or 'unknown'}")
+        if hint := intel.staleness_hint():
+            console.print(f"[yellow]{hint}[/]")
+        return
+    try:
+        summary = intel.update(url=url)
+    except ValueError as exc:
+        console.print(f"[bold red]Rejected fetched dataset:[/] {exc} — "
+                      "the previous dataset remains in place.")
+        raise typer.Exit(3)
+    except Exception as exc:
+        console.print(f"[bold red]Update failed:[/] {exc}")
+        raise typer.Exit(3)
+    console.print(f"[green]Updated[/] {summary['path']} — "
+                  f"{summary['entries']} entries, refreshed {summary['refreshed']} "
+                  f"(from {summary['url']})")
 
 
 @app.command()

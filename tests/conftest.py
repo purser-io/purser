@@ -27,6 +27,13 @@ def _clear_signal_caches():
     hf_verdicts._cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_user_intel(tmp_path_factory, monkeypatch):
+    """A developer's real ~/.purser/loader_cves.yaml must never leak into tests."""
+    monkeypatch.setenv("PURSER_INTEL_DIR",
+                       str(tmp_path_factory.mktemp("intel")))
+
+
 class EvilOsSystem:
     def __reduce__(self):
         import os

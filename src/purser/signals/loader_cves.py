@@ -48,12 +48,23 @@ _MAX_JSON = 1024 * 1024
 
 
 def _dataset() -> list[dict]:
+    """Resolution order: PURSER_LOADER_CVES → user-updated file → vendored.
+
+    The user file is written by `purser update-intel` (`core/intel.py`) so a
+    pip/container user can refresh intel without upgrading Purser.
+    """
     override = env_get("LOADER_CVES", "")
     try:
         if override:
             text = Path(override).read_text()
         else:
-            text = (resources.files("purser.data") / "loader_cves.yaml").read_text()
+            from purser.core.intel import user_intel_path
+
+            user = user_intel_path()
+            if user.exists():
+                text = user.read_text()
+            else:
+                text = (resources.files("purser.data") / "loader_cves.yaml").read_text()
         data = yaml.safe_load(text) or []
     except (OSError, yaml.YAMLError):
         return []

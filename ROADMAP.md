@@ -64,9 +64,13 @@ orchestrates detection rather than competing on it.
      (`keras_version` / `transformers_version`) in a known load-time-CVE
      range → one aggregated LOW `LOADER_CVE` advisory per file. Dataset is
      regenerated from OSV.dev, model-scoped (tracked packages + load-time
-     CWEs only), on a **weekly PR cadence** (`loader-cve-refresh.yml`) with
-     `PURSER_LOADER_CVES` for operator-side refresh. Remaining: more
-     version channels (llama.cpp/GGUF lacks one the artifact carries).
+     CWEs only), on a **weekly PR cadence** (`loader-cve-refresh.yml`);
+     end users refresh without upgrading via **`purser update-intel`**
+     (validated HTTPS fetch to `~/.purser/`, staleness hint after 90 days,
+     `PURSER_INTEL_URL` mirror + `PURSER_LOADER_CVES` for air-gap).
+     Remaining: more version channels (llama.cpp/GGUF lacks one the
+     artifact carries), and signing the published dataset (cosign) so
+     `update-intel` can verify provenance, not just schema.
    - **Known-bad denylist — SHIPPED** (`denylist:` policy block; see
      candidates table). Seeding an open malicious-model IOC feed remains the
      open opportunity.

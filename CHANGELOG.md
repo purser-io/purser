@@ -70,6 +70,15 @@ GitHub notes are generated automatically; this file is the curated summary.
   gate to hub scans; local scans still make zero network calls,
   regression-tested). Benchmarks pin `PURSER_SIGNALS=0` so published
   numbers keep measuring the static core.
+- **`purser update-intel`** — end-user intel refresh without upgrading.
+  Fetches the latest loader-CVE dataset over HTTPS (`PURSER_INTEL_URL`,
+  default: the project repo; point at an internal mirror when air-gapped),
+  schema-validates it (a bad fetch is rejected and the previous dataset
+  stays), and installs to `~/.purser/` (`PURSER_INTEL_DIR`), which scans
+  prefer over the vendored copy. Scans themselves never fetch; when the
+  active dataset is >90 days old, table-format scans print a one-line
+  `update-intel` hint. `--check` shows the active dataset's source, entry
+  count, and age.
 - **Known-bad denylist policy dimension** (`denylist:` block). Exact
   file-content SHA-256s, publisher globs, and repo/name globs that always
   `BLOCK` (`POLICY_DENYLIST_HASH` / `_PUBLISHER` / `_MODEL`), plus

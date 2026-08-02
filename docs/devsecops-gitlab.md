@@ -200,6 +200,13 @@ weights, advanced pickle tricks). Turn it on with `PURSER_ENABLE_DEEP=1` and
 `PURSER_DEEP_URL=http://purser-deep:8090`. It's off by default; see the
 README's [Deep analysis](../README.md#deep-analysis-optional-companion) section.
 
+**Keeping CVE intel fresh in CI:** the loader-CVE dataset ships inside the
+image, frozen at release. Either rebuild/refresh images regularly, or add
+`purser update-intel` as the first script line of the scan job (one HTTPS
+fetch to the project repo or your `PURSER_INTEL_URL` mirror; a failed fetch
+falls back to the bundled dataset). On air-gapped runners, distribute the
+file yourself and set `PURSER_LOADER_CVES: /path/loader_cves.yaml`.
+
 **Want governance checks?** An opt-in gate can require models to *document
 themselves*: set `PURSER_CARD_ATTESTATIONS: "1"` and `hf://` scans flag a
 missing model card (`CARD_MISSING`) or missing declared eval results
