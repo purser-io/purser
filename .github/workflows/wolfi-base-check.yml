@@ -148,7 +148,7 @@ jobs:
       - name: Open / update refresh PR
         id: cpr
         if: steps.check.outputs.drift == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           # Fine-grained PAT / App token (Contents + Pull requests: write) so the
           # bot can open the PR — the default GITHUB_TOKEN is blocked from
