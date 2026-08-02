@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from purser.core import audit, metrics
+from purser.core import atlas, audit, metrics
 from purser.core.deep import DEEP_FORMATS, deep_enabled, run_deep
 from purser.core.dispatch import scan_file
 from purser.core.findings import FileResult, Finding, ScanReport, Severity, Verdict
@@ -233,6 +233,7 @@ def scan_target(
     report.signal_findings = collect_signals(ctx)
 
     report = policy.evaluate(report)
+    atlas.tag_report(report)  # ATLAS enrichment (additive tags; PURSER_ATLAS=0 off)
     report.duration_seconds = time.monotonic() - started
 
     # Observability: metrics (always, cheap) + structured audit (if enabled).

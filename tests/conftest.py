@@ -17,6 +17,16 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_signal_caches():
+    """The hf-verdicts lookup cache is per-process; tests must start clean."""
+    from purser.signals import hf_verdicts
+
+    hf_verdicts._cache.clear()
+    yield
+    hf_verdicts._cache.clear()
+
+
 class EvilOsSystem:
     def __reduce__(self):
         import os

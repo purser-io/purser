@@ -1,0 +1,52 @@
+# MITRE ATLAS technique mapping (enrichment only — not a signature source).
+#
+# Maps finding rule-id PREFIXES to ATLAS technique ids from
+# https://atlas.mitre.org / mitre-atlas/atlas-data. Longest matching prefix
+# wins; every matched finding also carries the supply-chain umbrella
+# technique. Kept deliberately to techniques whose fit is unambiguous.
+
+umbrella:
+  id: AML.T0010.003
+  name: "ML Supply Chain Compromise: Model"
+
+techniques:
+  AML.T0011:
+    name: "User Execution: Unsafe ML Artifacts"
+    prefixes:
+      - PICKLE_
+      - PYTORCH_
+      - KERAS_
+      - TF_
+      - TFLITE_
+      - ONNX_
+      - GGUF_
+      - COREML_
+      - OPENVINO_
+      - PADDLE_
+      - SKOPS_
+      - MAR_
+      - MLFLOW_
+      - CAFFE_
+      - PY_
+      - TRC_
+      - AUTO_MAP
+      - ARCHIVE_
+      - NUMPY_
+  AML.T0025:
+    name: "Exfiltration via Cyber Means"
+    prefixes:
+      - EXFIL_
+  AML.T0018:
+    name: "Backdoor ML Model"
+    prefixes:
+      - DEEP_GADGET_
+      - DEEP_WEIGHT
+      - DEEP_STEGO
+  AML.T0010.003:
+    name: "ML Supply Chain Compromise: Model"
+    prefixes:
+      - HF_UPSTREAM_
+      - POLICY_DENYLIST_
+      - SIGNATURE_
+      - SIGSTORE_
+      - LOADER_CVE

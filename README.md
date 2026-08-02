@@ -429,6 +429,8 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_SIGNALS` | `1` | Disables all [signal sources](#signal-sources-upstream-intelligence) when falsy (`0`/`false`/`no`/`off`). Network-using built-ins run only on hub-fetched scans; the offline `loader-cves` source runs on every scan; third-party plugins decide their own applicability. |
 | `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
+| `PURSER_SIGNAL_CACHE_TTL` | `300` | Seconds to cache hub verdict lookups for mutable refs (`main`); a 40-hex commit-sha revision caches for the process lifetime. `0` disables. Failures are never cached. |
+| `PURSER_ATLAS` | `1` | `0` disables [MITRE ATLAS](https://atlas.mitre.org) technique tags (`atlas:AML.T####`) appended to findings. |
 | `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
 | `PURSER_AUTO_APPROVE` | `0` | `1` auto-populates the admission webhook's approved-digest list from verdicts: verdicts in `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's sha256; FAIL/BLOCKED revokes. |
 | `PURSER_APPROVALS_PATH` | *(unset)* | File backend for auto-approval (the exact format the webhook reads — commit/sync it into the ConfigMap via GitOps). |
@@ -671,6 +673,13 @@ Sources must never raise (report trouble as a finding), and may only *add*
 findings — a source cannot suppress another signal or downgrade the verdict.
 Disable all sources with `PURSER_SIGNALS=0`, or one with
 `PURSER_SIGNAL_<NAME>=0` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`).
+
+**MITRE ATLAS tags.** Every finding is also tagged with the
+[MITRE ATLAS](https://atlas.mitre.org) technique it evidences
+(`atlas:AML.T0011` unsafe ML artifacts, `AML.T0025` exfiltration,
+`AML.T0018` backdoored model, `AML.T0010.003` supply-chain: model) from a
+vendored mapping — enrichment for SARIF/SOC pipelines, not a signature
+source. `PURSER_ATLAS=0` turns it off.
 
 ## Supply chain (of Purser itself)
 

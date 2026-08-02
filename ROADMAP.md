@@ -69,10 +69,12 @@ orchestrates detection rather than competing on it.
    - **Known-bad denylist — SHIPPED** (`denylist:` policy block; see
      candidates table). Seeding an open malicious-model IOC feed remains the
      open opportunity.
-   - Remaining in this arc: cheap **MITRE ATLAS tagging**, verdict-lookup
-     **caching by commit sha**, and the **exfil-latency** work (structural-
-     region scanning — also the prerequisite for the packed-binary-C2
-     residual).
+   - **MITRE ATLAS tagging — SHIPPED** (`atlas:AML.T####` tags from a
+     vendored mapping; `PURSER_ATLAS=0` off) and **verdict-lookup caching —
+     SHIPPED** (`PURSER_SIGNAL_CACHE_TTL`; commit-sha revisions cache for
+     the process lifetime, failures never cached).
+   - Remaining in this arc: the **exfil-latency** work (structural-region
+     scanning — also the prerequisite for the packed-binary-C2 residual).
 
 4. **Foundation readiness.** Community scaffolding ships (CONTRIBUTING, Code of
    Conduct, issue/PR templates, enforced DCO, `CITATION.cff`, `py.typed`).
@@ -176,9 +178,9 @@ intelligence and (b) **provenance/attestation** depth and interop.
 
 | Item | Notes |
 |---|---|
-| **Upstream scan-verdict enrichment — remaining refinement** *(pulled into Recommended next #3)* | The ingestion itself **shipped** (see *Recently shipped*: `purser.signals`, source `hf-verdicts`). Left here: **cache verdict lookups by commit sha** (one call/repo/revision today, no cross-scan cache). |
+| **Upstream scan-verdict enrichment** — **SHIPPED (incl. caching)** | Ingestion shipped (see *Recently shipped*: `purser.signals`, source `hf-verdicts`), and verdict lookups now cache per process (`PURSER_SIGNAL_CACHE_TTL`; commit-sha revisions for the process lifetime; failures never cached). |
 | **Loader-CVE mapping (OSV/GHSA, offline)** — **promoted to Recommended next #3** | No feed of malicious *models* exists, but framework/parser CVEs do: map a detected format + declared version to known load-time RCEs (`.keras`/`.h5` CVE-2025-9906/-9905 `safe_mode` bypass, Keras Lambda CVE-2024-3660, llama.cpp GGUF parser CVEs; CWE-502 class). Ingest bulk **OSV-JSON** (`ossf/osv-schema`, CC-BY-4.0) or the GHSA mirror **offline**; emit "load-unsafe under `<framework> <version>`". Also flags OSV `MAL-` malicious-*package* records against bundled deps. Build as a `purser.signals` source — offline, so it also breaks the signals-are-hub-only limitation. |
-| **MITRE ATLAS technique tagging** *(pulled into Recommended next #3)* | Tag findings with `AML.T####` IDs from `mitre-atlas/atlas-data` (YAML / STIX 2.1, free, monthly). Enrichment/credibility only — not a signature source. Cheap to ingest; aligns reports with the framework reviewers expect. |
+| **MITRE ATLAS technique tagging** — **SHIPPED** | Done: `atlas:AML.T####` tags appended to findings from a vendored rule-id → technique mapping (`data/atlas_map.yaml`; T0011 / T0025 / T0018 / T0010.003). Enrichment only, `PURSER_ATLAS=0` disables. Remaining refinement: refresh the mapping from `mitre-atlas/atlas-data` releases. |
 | **Known-bad denylist + refresh** — **SHIPPED** | Done: a first-class `denylist:` policy block — SHA-256 content hashes, publisher globs, repo globs (always `BLOCK`), and `denylist.files` external hash feeds re-read per evaluation (refresh like AV signatures, no policy reload). Remaining opportunity: **seeding an open malicious-model hash/IOC feed** to populate it from — that market gap is still real. |
 | **Signed AIBOM (model bill-of-materials)** | Extend the CycloneDX SBOM (today: the *package*) to a signed **model AIBOM** — files, hashes, formats, detected code surfaces, provenance/identity, verdict — as a cosign attestation. The static-provenance answer to W&B lineage (checksum/tamper-only, no signing) and to HiddenLayer's "AIBOM" marketing — but open and signed. |
 | **Provenance interop (W&B / registry)** | Read a W&B **Artifact manifest + digest + lineage DAG** (open-source SDK, no execution) as a provenance signal, and ship a **W&B Automations → webhook** gate recipe: scan on new version/alias, block promotion to a **protected alias** (`Production`) on FAIL. Generalizes to any registry with a promotion webhook. |

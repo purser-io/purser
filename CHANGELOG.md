@@ -40,6 +40,17 @@ GitHub notes are generated automatically; this file is the curated summary.
   `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
   (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
   presence is deliberately not a finding and never improves a verdict.
+- **MITRE ATLAS technique tagging** (`core/atlas.py`, `PURSER_ATLAS=0` to
+  disable). Findings carry `atlas:AML.T####` tags from a vendored rule-id →
+  technique mapping (`data/atlas_map.yaml`): unsafe-artifact rules →
+  AML.T0011, exfiltration → AML.T0025, deep gadget/stego → AML.T0018, plus
+  the AML.T0010.003 supply-chain umbrella. Additive enrichment only — tags
+  are appended so the metrics category (first tag) is unchanged.
+- **Hub verdict-lookup caching** (`PURSER_SIGNAL_CACHE_TTL`, default 300 s).
+  `hf-verdicts` lookups are cached per process: immutable 40-hex commit-sha
+  revisions for the process lifetime, mutable refs for the TTL; failures and
+  incomplete upstream scans are never cached, and cache hits return copies,
+  never shared finding objects.
 - **Loader-CVE mapping** (signal source `loader-cves`, **offline** — the
   first signal that runs on local scans). Maps a detected format + the
   framework version the artifact itself declares (`keras_version` in

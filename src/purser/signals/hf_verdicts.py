@@ -33,8 +33,11 @@ for enterprise/mirrored hubs and ``HF_TOKEN`` for private repos.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,6 +55,38 @@ DEFAULT_ENDPOINT = "https://huggingface.co"
 _UNSAFE = {"unsafe", "malicious", "dangerous", "blocked"}
 
 _MAX_FINDINGS = 50       # cap per repo; the rest is summarized
+
+# Per-process verdict cache. An immutable revision (a 40-hex commit sha) can
+# never change, so it caches for the process lifetime; a mutable ref ("main",
+# a tag) caches for PURSER_SIGNAL_CACHE_TTL seconds (default 300; 0 disables).
+# Failures (SIGNAL_UNAVAILABLE) are never cached.
+_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+_cache: dict[tuple[str, str, str], tuple[float | None, list[Finding]]] = {}
+
+
+def _cache_ttl() -> float:
+    return float(env_get("SIGNAL_CACHE_TTL", "300") or "300")
+
+
+def _cache_get(key: tuple[str, str, str]) -> list[Finding] | None:
+    hit = _cache.get(key)
+    if hit is None:
+        return None
+    expiry, findings = hit
+    if expiry is not None and time.monotonic() > expiry:
+        _cache.pop(key, None)
+        return None
+    return copy.deepcopy(findings)  # never share Finding objects across reports
+
+
+def _cache_put(key: tuple[str, str, str], revision: str,
+               findings: list[Finding]) -> None:
+    ttl = _cache_ttl()
+    if ttl <= 0:
+        return
+    immutable = bool(_COMMIT_SHA.match(revision.lower()))
+    expiry = None if immutable else time.monotonic() + ttl
+    _cache[key] = (expiry, copy.deepcopy(findings))
 
 
 def _hub_endpoint() -> str:
@@ -138,6 +173,11 @@ class HFVerdictsSource:
         return out
 
     def collect(self, ctx: SignalContext) -> list[Finding]:
+        revision = ctx.revision or "main"
+        cache_key = (_hub_endpoint(), ctx.repo_id or "", revision)
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
         repo = urllib.parse.quote(ctx.repo_id or "", safe="/")
         url = f"{_hub_endpoint()}/api/models/{repo}"
         if ctx.revision:
@@ -208,4 +248,6 @@ class HFVerdictsSource:
                 self.name,
                 f"the Hub has not finished scanning {ctx.repo_id}; upstream "
                 "verdicts are incomplete"))
+            return findings  # incomplete scans are never cached
+        _cache_put(cache_key, revision, findings)
         return findings
