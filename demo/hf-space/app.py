@@ -44,7 +44,15 @@ def _render(report: ScanReport) -> tuple[str, list[list[str]], str]:
 def scan_upload(file) -> tuple[str, list[list[str]], str]:
     if file is None:
         return "Upload a model file first.", [], ""
-    src = Path(file)
+    # Gradio stages uploads under the system temp dir; confine the scan to
+    # that staging area so a crafted path can't point the scanner elsewhere
+    # (same resolved-prefix guard as the REST API's scan-root confinement).
+    src = Path(file).resolve()
+    staging = Path(tempfile.gettempdir()).resolve()
+    if staging != src and staging not in src.parents:
+        return "Rejected: upload is outside the staging directory.", [], ""
+    if not src.is_file():
+        return "Upload not found.", [], ""
     if src.stat().st_size > MAX_UPLOAD_MB * 1024 * 1024:
         return f"File exceeds the demo's {MAX_UPLOAD_MB} MB limit.", [], ""
     return _render(scan_target(src))

@@ -110,6 +110,10 @@ def test_store_failure_never_raises(tmp_path, monkeypatch):
     monkeypatch.setenv("PURSER_APPROVALS_PATH", str(tmp_path))
     out = record_report(make_report(Verdict.PASS, [D1]))
     assert "error" in out
+    # exception detail must NOT leak into the summary (it reaches API clients
+    # via metadata.approvals) — it belongs in the server log only
+    assert "Errno" not in out["error"]
+    assert str(tmp_path) not in out["error"]
 
 
 def test_errored_files_are_not_approved(tmp_path, monkeypatch):

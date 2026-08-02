@@ -31,6 +31,7 @@ break a scan — and every action is reported in the scan's
 from __future__ import annotations
 
 import json
+import logging
 import re
 import ssl
 import urllib.error
@@ -41,6 +42,8 @@ from typing import Any
 
 from purser.core.env import env_get
 from purser.core.findings import ScanReport, Verdict
+
+_log = logging.getLogger("purser.approvals")
 
 _HEX64 = re.compile(r"(?:sha256:)?([a-fA-F0-9]{64})")
 
@@ -243,7 +246,12 @@ def record_report(report: ScanReport) -> dict[str, Any] | None:
         else:
             return None
     except Exception as exc:
-        return {"error": f"approvals store update failed: {exc}",
+        # Detail goes to the server log only — the summary lands in the API
+        # response via metadata.approvals, and exception text can leak paths
+        # or backend error bodies to external clients.
+        _log.warning("approvals store update failed (%s): %s",
+                     store.describe(), exc)
+        return {"error": "approvals store update failed (see server logs)",
                 "store": store.describe()}
     return {"action": action, "digests": sorted(digests),
             "store": store.describe(), "verdict": verdict.value}

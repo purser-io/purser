@@ -1,2 +1,5 @@
 purser[hf]>=0.2.1
-gradio>=5.12,<6
+# gradio floor: 6.15+ clears GHSA-39mp-8hj3-5c49 (path traversal, fixed 6.7),
+# GHSA-jmh7-g254-2cq9 (SSRF, fixed 6.6), GHSA-7hp7-4p35-3cx2 (cookie
+# injection, fixed 6.15).
+gradio>=6.15,<7

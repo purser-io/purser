@@ -132,7 +132,10 @@ jobs:
           load: true
           tags: purser-${{ matrix.name }}:ci
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # ignore-error: a GHA cache-export blip ("failed to solve:
+          # not_found" after all layers built) must not fail the build —
+          # the cache is an optimization, not a correctness gate.
+          cache-to: type=gha,mode=max,ignore-error=true,scope=${{ matrix.name }}
       - name: Trivy scan (HIGH/CRITICAL, fixed only)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
