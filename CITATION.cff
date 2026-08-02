@@ -2,9 +2,12 @@ cff-version: 1.2.0
 message: "If you use Purser in your work, please cite it as below."
 title: "Purser"
 abstract: >-
-  A static security scanner for machine-learning model artifacts: malicious-code
-  and data-exfiltration detection with policy-based supply-chain controls
-  (country of origin, publisher, name, format) and signed provenance.
+  A model supply-chain control plane: policy, provenance, and enforcement for
+  machine-learning model artifacts. Static malicious-code and
+  data-exfiltration scanning is one signal input, alongside verified
+  provenance (Ed25519/Sigstore) and upstream scan-verdict ingestion; policy
+  (country of origin, publisher, name, format, signer identity) renders a
+  verdict enforced in CI and at Kubernetes admission.
 type: software
 authors:
   - name: "The Purser Authors"

@@ -1,6 +1,6 @@
 """Prometheus metrics — a tiny in-process registry (no external dependency).
 
-Domain-specific series for an ML-model security scanner, chosen to drive useful
+Domain-specific series for a model supply-chain gate, chosen to drive useful
 Prometheus/Grafana panels: outcomes by verdict, threats by category, scans by
 model format, policy blocks by reason, signature/provenance outcomes, origin
 country, throughput, errors, and live concurrency. Thread-safe.

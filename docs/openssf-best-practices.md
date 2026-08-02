@@ -51,7 +51,7 @@ passing requirement's floor, noted for transparency).
 |---|---|---|
 | Working build (from source) | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles |
 | Common, FLOSS build tools | Met | `uv` / `pip`, `hatchling`, `helm`, `docker` |
-| Automated test suite | Met | 264 tests in `tests/` |
+| Automated test suite | Met | 292 tests in `tests/` |
 | Test-invocation documented | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test` |
 | Tests cover the majority of the code | Met | unit + API + adversarial/evasion fixtures across scanners/policy/signing |
 | Continuous integration | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix, lint, tests, helm, image build + Trivy) |
@@ -107,7 +107,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 ### Basics
 | Criterion | Level | Answer | Justification to paste |
 |---|---|---|---|
-| description_good | MUST | Met | README + https://purser-io.io describe the tool: a static ML-model security scanner (malicious-code + exfiltration detection, policy engine). |
+| description_good | MUST | Met | README + https://purser-io.io describe the tool: a model supply-chain control plane (policy, provenance, enforcement; static malicious-code + exfiltration scanning as one signal input). |
 | interact | MUST | Met | GitHub Issues + issue forms (`.github/ISSUE_TEMPLATE/`). |
 | contribution | MUST | Met | `CONTRIBUTING.md`. |
 | contribution_requirements | SHOULD | Met | `CONTRIBUTING.md` — ruff + pytest, and a DCO `Signed-off-by`. |
@@ -152,7 +152,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 | build | MUST | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles. |
 | build_common_tools | SUGGESTED | Met | `uv`/`pip`, hatchling, helm, docker. |
 | build_floss_tools | SHOULD | Met | All build tools are FLOSS. |
-| test | MUST | Met | 264 automated tests in `tests/`. |
+| test | MUST | Met | 292 automated tests in `tests/`. |
 | test_invocation | SHOULD | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test`. |
 | test_most | SUGGESTED | Met | Unit + API + adversarial/evasion coverage across scanners/policy/signing. |
 | test_continuous_integration | SUGGESTED | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix). |

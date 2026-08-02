@@ -1,6 +1,6 @@
 # Purser Helm chart
 
-Production-ready chart for **Purser** — the ML model security scanner. Deploys
+Production-ready chart for **Purser** — the model supply-chain control plane. Deploys
 the core scanning service and, optionally, the HuggingFace worker and the
 deep-analysis companion.
 

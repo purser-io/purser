@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --no-deps .
 
 FROM ${WOLFI}
 LABEL org.opencontainers.image.title="Purser" \
-      org.opencontainers.image.description="ML model security scanner with policy-based controls" \
+      org.opencontainers.image.description="Model supply-chain control plane: policy, provenance, and enforcement for ML model artifacts" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="cgr.dev/chainguard/wolfi-base:latest"
 
