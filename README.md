@@ -161,14 +161,14 @@ analyzers, Purser is the control plane above them — several are things Purser
 can **ingest** rather than compete with (the Hub runs picklescan and Guardian;
 their verdicts arrive as signals on `hf://` scans). The comparison below is on
 the scanning axis only. Legend: ✅ yes · ◐ partial/limited ·
-❌ no · ❔ not public. Best-effort assessment of publicly documented features as of
-**July 2026** — projects evolve; verify before relying on a cell.
+❌ no · ❔ not public. Best-effort assessment of publicly documented features,
+re-verified **August 2026** — projects evolve; verify before relying on a cell.
 
 | Capability | **Purser** | picklescan | Fickling | ModelScan | ModelAudit | Commercial¹ |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | License | Apache-2.0 | OSS | OSS | OSS | OSS | Commercial |
 | Pickle opcode malware scan | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Format breadth² | ✅ 35+ | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 30+ | ✅ |
+| Format breadth² | ✅ ~35 | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 40+ | ✅ |
 | Safetensors / GGUF / ONNX / TFLite | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Data-exfil & secret detection³ | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
 | `trust_remote_code` Python (AST) + `auto_map` | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
@@ -177,14 +177,18 @@ the scanning axis only. Legend: ✅ yes · ◐ partial/limited ·
 | Cryptographic signing / verified provenance⁴ | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | CLI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | REST API server | ✅ | ❌ | ❌ | ❌ | ◐ | ✅ |
-| SARIF output | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
+| SARIF output | ✅ | ❌ | ❌ | ❌ | ✅ | ◐ |
 | Docker + Kubernetes deploy | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
 | Deploy-time enforcement (CI action + K8s admission webhook) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | Ingests upstream/third-party scanner verdicts (plugin signals) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
-| CVE feeds / behavioral backdoor / dashboards | ❌⁵ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Known-bad denylist (content hashes + publisher globs, offline refresh) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Loader-CVE intel (declared framework version → known load-time RCE) | ◐⁵ | ❌ | ❌ | ❌ | ◐ | ✅ |
+| Live threat feeds / behavioral backdoor / dashboards | ❌⁵ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
-¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
-enterprise platforms; capabilities vary and are gated behind licensing.
+¹ Protect AI **Guardian** (built on ModelScan; Protect AI is now part of
+**Palo Alto Networks** — Prisma AIRS, acquisition completed July 2025) and
+**HiddenLayer Model Scanner** — enterprise platforms; capabilities vary and
+are gated behind licensing.
 ² ~35 distinct formats identified and policy-gated — a dedicated scanner where the
 format carries code/graph (pickle, Keras, ONNX, TF, GGUF, CoreML, OpenVINO, Caffe,
 TorchServe `.mar`, MLflow, …), and format-ID + exfil for data-only blobs (GGML,
@@ -199,16 +203,19 @@ exfiltration strings.
 binds keys to publisher + country (with revocation/validity), **and Sigstore
 (Fulcio/Rekor) bundles** for verified external-root identity (offline). Commercial
 tools track provenance/lineage (AIBOM) but not user-controlled signature verification.
-⁵ No *built-in* feeds or dashboards — but external feeds can plug in as
-[signal sources](#signal-sources-upstream-intelligence); the honest ❌ is for
-what ships in the box.
+⁵ What ships in the box is a **vendored, curated loader-CVE dataset** (the ◐:
+it maps declared framework versions to known load-time RCEs, offline —
+ModelAudit ships CVE-aware checks too), and external feeds can plug in as
+[signal sources](#signal-sources-upstream-intelligence). The ❌ is honest for
+*live/subscription* threat feeds, behavioral detection, and dashboards —
+enterprise-platform territory.
 
 **Honest take:** Purser's edge is the combination of broad format coverage, the
 exfiltration engine, `trust_remote_code` AST analysis, and a **policy +
 verified-provenance + enforcement** layer (country-of-origin, model signing,
 CI/admission gating) that also *aggregates* other analyzers' verdicts as
 signals — in one OSS tool. It is *not* a substitute for commercial platforms
-where you need built-in CVE/threat-intel feeds, ML-behavioral backdoor
+where you need live threat-intel subscriptions, ML-behavioral backdoor
 detection, dashboards, or vendor support;
 and **ModelAudit** is an excellent, more mature pure-scanner alternative if you don't
 need policy/provenance. All static scanners — this one included — can be evaded by
