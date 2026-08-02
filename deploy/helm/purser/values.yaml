@@ -225,6 +225,14 @@ admission:
   # ConfigMap and mounted; a pod that declares models is admitted only if every
   # declared digest is listed. Empty => any declared model is denied (fail-closed).
   approvedDigests: []
+  # Close the scan→approve→admit loop automatically: verdicts from the core
+  # API populate this chart's approved-digests ConfigMap (PASS approves each
+  # scanned file's sha256; FAIL/BLOCKED revokes). Grants the core
+  # ServiceAccount get/patch on that ONE ConfigMap (Role, not ClusterRole).
+  # Off by default — auto-approval is a policy decision.
+  autoApprove:
+    enabled: false
+    verdicts: "PASS"          # comma-separated verdicts that approve, e.g. "PASS,WARN"
   # Which objects to validate (default: Pods). Point at controllers instead if
   # you prefer template-level enforcement.
   rules:

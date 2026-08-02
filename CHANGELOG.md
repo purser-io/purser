@@ -40,6 +40,18 @@ GitHub notes are generated automatically; this file is the curated summary.
   `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
   (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
   presence is deliberately not a finding and never improves a verdict.
+- **Scan→approve→admit loop** (`core/approvals.py`, opt-in
+  `PURSER_AUTO_APPROVE=1`). Verdicts now populate the admission webhook's
+  approved-digest list automatically: verdicts in
+  `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's
+  SHA-256, and `FAIL`/`BLOCKED` revokes previously-approved digests. Two
+  backends: a plain file (`PURSER_APPROVALS_PATH`, the exact format the
+  webhook reads — GitOps it into the ConfigMap) or an in-cluster ConfigMap
+  patched through the Kubernetes API with the pod's ServiceAccount (stdlib
+  HTTP, no client dependency; Helm `admission.autoApprove.enabled` wires the
+  env + a Role scoped to that one ConfigMap). Every action is surfaced in the
+  report's `metadata.approvals` and audit log; store failures degrade to a
+  recorded error, never a broken scan.
 - **HuggingFace Space live demo** (`demo/hf-space/`, push-ready): Gradio app
   running the real scanner + policy engine on uploads or Hub repos, with
   upstream-verdict ingestion; deploy instructions in `DEPLOY.md`.

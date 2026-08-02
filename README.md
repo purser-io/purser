@@ -416,6 +416,9 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
 | `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
 | `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
+| `PURSER_AUTO_APPROVE` | `0` | `1` auto-populates the admission webhook's approved-digest list from verdicts: verdicts in `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's sha256; FAIL/BLOCKED revokes. |
+| `PURSER_APPROVALS_PATH` | *(unset)* | File backend for auto-approval (the exact format the webhook reads — commit/sync it into the ConfigMap via GitOps). |
+| `PURSER_APPROVALS_CONFIGMAP` | *(unset)* | In-cluster backend: name of the ConfigMap to patch via the K8s API (ServiceAccount token; the Helm chart's `admission.autoApprove.enabled` wires this + RBAC). Also: `_KEY` (default `approved.txt`), `_NAMESPACE`. |
 | `PURSER_SCAN_ROOT` | `/models` | Path-scan confinement root. |
 | `PURSER_METRICS_ENABLED` | `1` | `0`/`false` disables the `/metrics` endpoint. |
 | `PURSER_AUDIT` | `off` | `stdout` or `syslog` to emit a JSON audit record per scan. |
@@ -692,6 +695,15 @@ container image is pinned by `@sha256:` digest and that any model a workload
 declares (annotation `purser.io/models`) is on the **approved-digest** list — the
 SHA-256s of models that passed a scan. Opt-in per namespace/pod and fail-closed
 by default; see the [chart README](deploy/helm/purser/README.md#admission-webhook-deploy-time-enforcement).
+
+**Closing the loop (`admission.autoApprove.enabled=true`).** The approved list
+can populate itself from verdicts instead of being operator-managed: a `PASS`
+at any scan endpoint approves each scanned file's digest into the webhook's
+ConfigMap (narrow RBAC — get/patch on that one ConfigMap), and a later
+`FAIL`/`BLOCKED` on the same artifact **revokes** it. Scan → approve → admit,
+with no manual hop; every action is recorded in the report's
+`metadata.approvals` and the audit log. Outside Kubernetes the same mechanism
+writes a file (`PURSER_APPROVALS_PATH`) you can GitOps into the ConfigMap.
 
 ## Security model
 

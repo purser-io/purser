@@ -49,7 +49,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from purser import __version__
-from purser.core import metrics
+from purser.core import approvals, metrics
 from purser.core.env import env_get
 from purser.core.hf import HFNotAvailable, download_repo
 from purser.core.policy import Policy, PolicyError
@@ -237,6 +237,7 @@ async def scan_upload(
             report = await run_in_threadpool(
                 scan_target, dest, policy=pol, origin=origin, publisher=publisher
             )
+        approvals.maybe_record(report)
         report.target = safe_name
         for fr in report.files:
             fr.path = Path(fr.path).name
@@ -263,6 +264,7 @@ def scan_path(req: PathScanRequest, _: None = Depends(require_auth),
     with _ScanSlot():
         report = scan_target(target, policy=get_policy(), origin=req.origin,
                              publisher=req.publisher)
+    approvals.maybe_record(report)
     return report.to_dict()
 
 
@@ -303,6 +305,7 @@ def scan_hf(req: HFScanRequest, _: None = Depends(require_auth),
                         repo_id=req.repo_id, revision=req.revision,
                         source="huggingface"),
                 )
+                approvals.maybe_record(report)
                 report.target = f"hf://{req.repo_id}"
                 return report.to_dict()
             finally:

@@ -48,13 +48,15 @@ orchestrates detection rather than competing on it.
    strategy is explicit that distribution matters as much as features — and
    every later item (adopters, second maintainer, CNCF) compounds on this one.
 
-2. **Close the enforcement loop (admission-webhook depth).** Today the
-   scan→approve→admit chain has a manual hop: an operator hand-maintains the
-   approved-model-digest ConfigMap. Build the controller that **auto-populates
-   approvals from scan verdicts** (PASS → digest admitted, revocation on
-   re-scan), and optionally verify **cosign attestations** instead of a digest
-   allowlist — connecting the provenance layer to the enforcement layer. This
-   is the difference between *claiming* a control plane and *being* one.
+2. **Close the enforcement loop (admission-webhook depth).** **Auto-approval
+   SHIPPED:** `core/approvals.py` populates the webhook's approved-digest set
+   from verdicts — PASS approves each scanned file's sha256, FAIL/BLOCKED
+   revokes — via a file backend (`PURSER_APPROVALS_PATH`, GitOps-able) or an
+   in-cluster ConfigMap patch (stdlib K8s API + narrow Role; Helm
+   `admission.autoApprove.enabled`). Opt-in (`PURSER_AUTO_APPROVE=1`),
+   auditable (`metadata.approvals`). **Remaining:** verify **cosign
+   attestations** instead of a digest allowlist — connecting the provenance
+   layer to the enforcement layer directly.
 
 3. **Prove aggregation with a second real intel signal.**
    - **Loader-CVE mapping (OSV/GHSA)** as an **offline** signal source — maps

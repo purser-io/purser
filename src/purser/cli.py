@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from purser import __version__
+from purser.core import approvals
 from purser.core.findings import ScanReport, Severity
 from purser.core.hf import HFNotAvailable, download_repo, parse_hf_uri
 from purser.core.policy import Policy, PolicyError
@@ -184,6 +185,13 @@ def scan(
     report = scan_target(local_target, policy=pol, origin=origin,
                          publisher=publisher, repo_id=repo_id,
                          signal_context=signal_ctx)
+    approvals.maybe_record(report)
+    if summary := report.metadata.get("approvals"):
+        if "error" in summary:
+            console.print(f"[yellow]Approvals: {summary['error']}[/]")
+        else:
+            console.print(f"Approvals: {summary['action']} "
+                          f"{len(summary['digests'])} digest(s) → {summary['store']}")
     if hf_repo is not None:
         report.target = target
     _emit(report, fmt, output)
