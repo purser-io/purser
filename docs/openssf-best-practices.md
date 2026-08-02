@@ -31,7 +31,7 @@ passing requirement's floor, noted for transparency).
 | Public version-controlled source | Met | public git repo |
 | Tracks changes + interim versions (distributed VCS) | Met | git |
 | Unique version numbering | Met | SemVer in `pyproject.toml` / `Chart.yaml` |
-| Semantic versioning | Met | `0.1.x`; tags `v0.1.0`…`v0.2.1` |
+| Semantic versioning | Met | `0.2.x`; tags `v0.1.0`…`v0.2.1` |
 | Release notes for each release | Met | `CHANGELOG.md` (Keep-a-Changelog) + GitHub Releases |
 
 ## Reporting
@@ -51,7 +51,7 @@ passing requirement's floor, noted for transparency).
 |---|---|---|
 | Working build (from source) | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles |
 | Common, FLOSS build tools | Met | `uv` / `pip`, `hatchling`, `helm`, `docker` |
-| Automated test suite | Met | 264 tests in `tests/` |
+| Automated test suite | Met | 353 tests in `tests/` |
 | Test-invocation documented | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test` |
 | Tests cover the majority of the code | Met | unit + API + adversarial/evasion fixtures across scanners/policy/signing |
 | Continuous integration | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix, lint, tests, helm, image build + Trivy) |
@@ -107,7 +107,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 ### Basics
 | Criterion | Level | Answer | Justification to paste |
 |---|---|---|---|
-| description_good | MUST | Met | README + https://purser-io.io describe the tool: a static ML-model security scanner (malicious-code + exfiltration detection, policy engine). |
+| description_good | MUST | Met | README + https://purser-io.io describe the tool: a model supply-chain control plane (policy, provenance, enforcement; static malicious-code + exfiltration scanning as one signal input). |
 | interact | MUST | Met | GitHub Issues + issue forms (`.github/ISSUE_TEMPLATE/`). |
 | contribution | MUST | Met | `CONTRIBUTING.md`. |
 | contribution_requirements | SHOULD | Met | `CONTRIBUTING.md` — ruff + pytest, and a DCO `Signed-off-by`. |
@@ -152,7 +152,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 | build | MUST | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles. |
 | build_common_tools | SUGGESTED | Met | `uv`/`pip`, hatchling, helm, docker. |
 | build_floss_tools | SHOULD | Met | All build tools are FLOSS. |
-| test | MUST | Met | 264 automated tests in `tests/`. |
+| test | MUST | Met | 353 automated tests in `tests/`. |
 | test_invocation | SHOULD | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test`. |
 | test_most | SUGGESTED | Met | Unit + API + adversarial/evasion coverage across scanners/policy/signing. |
 | test_continuous_integration | SUGGESTED | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix). |
@@ -166,8 +166,8 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 ### Security
 | Criterion | Level | Answer | Justification to paste |
 |---|---|---|---|
-| know_secure_design | MUST | Met | `SECURITY.md` (threat model, hardening, residual risk); the scanner never deserializes/executes a model. |
-| know_common_errors | MUST | Met | No deserialization; zip-bomb/zip-slip guards, size caps, path confinement. |
+| know_secure_design | MUST | Met | `SECURITY.md` (threat model, hardening, residual risk); the scanner never deserializes/executes a model, and signal-source responses are parsed as data, never executed. |
+| know_common_errors | MUST | Met | No deserialization; zip-bomb/zip-slip guards, size caps, path confinement; signal-source HTTP is hub-only with request timeouts, add-only findings, and fail-visible (`SIGNAL_UNAVAILABLE`) degradation; the `update-intel` fetch is user-invoked only, schema-validated, and rejects bad payloads while keeping the previous dataset. |
 | crypto_published | MUST | Met | Ed25519 signatures; Sigstore (Fulcio/Rekor); cosign for artifacts. |
 | crypto_call | SHOULD | Met | Uses `cryptography` / `sigstore` — no roll-your-own crypto. |
 | crypto_floss | MUST | Met | Both crypto libraries are FLOSS. |
@@ -197,18 +197,16 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 
 ## Submitting (project owner)
 
-**Registered — project ID 13900:** https://www.bestpractices.dev/projects/13900
-(currently **94%**; **passing** once the last criteria are marked). The README
-badge is live and auto-updates:
+**Registered — project ID 13900: 100% / PASSING** —
+https://www.bestpractices.dev/projects/13900. The README badge is live and
+auto-updates:
 
 ```markdown
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
 ```
 
-To reach 100% / passing:
-1. Mark any still-unanswered criteria using the **Submission sheet** above —
-   every MUST is Met, with two justified N/A (`crypto_pfs`,
-   `crypto_password_storage`).
-2. **Fix the homepage URL** in the project settings: it currently reads
-   `https://puser-io.io` (typo) — set it to **`https://purser-io.io`** so the
-   homepage / `sites_https` criterion passes.
+Maintenance: when facts change (test counts, new subsystems like
+`purser.signals`, the description), refresh the corresponding answers on
+bestpractices.dev using the submission sheet above as the source of truth —
+the site copy of `description_good`, `know_secure_design`, and
+`know_common_errors` should match this file.

@@ -140,6 +140,10 @@ podDisruptionBudget:
 
 # Restrict traffic. When enabled: ingress only to the API port (from
 # `networkPolicy.allowFrom`), egress limited to DNS (+ extras you add).
+# Note: the selector also matches the HF worker pod — with hf.enabled, add
+# Hub egress via extraEgress or hf:// downloads AND the upstream-verdict
+# signal lookups will fail (the latter degrade to a SIGNAL_UNAVAILABLE
+# finding, not a hard error).
 networkPolicy:
   enabled: false
   allowFrom: []               # e.g. [{ namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
@@ -221,6 +225,14 @@ admission:
   # ConfigMap and mounted; a pod that declares models is admitted only if every
   # declared digest is listed. Empty => any declared model is denied (fail-closed).
   approvedDigests: []
+  # Close the scan→approve→admit loop automatically: verdicts from the core
+  # API populate this chart's approved-digests ConfigMap (PASS approves each
+  # scanned file's sha256; FAIL/BLOCKED revokes). Grants the core
+  # ServiceAccount get/patch on that ONE ConfigMap (Role, not ClusterRole).
+  # Off by default — auto-approval is a policy decision.
+  autoApprove:
+    enabled: false
+    verdicts: "PASS"          # comma-separated verdicts that approve, e.g. "PASS,WARN"
   # Which objects to validate (default: Pods). Point at controllers instead if
   # you prefer template-level enforcement.
   rules:
@@ -248,7 +260,7 @@ hf:
     tag: ""
   replicaCount: 1
   hfAllowlist: ""             # comma-separated org/ prefixes; empty = any
-  hfTokenSecret: ""          # Secret name containing key HF_TOKEN (private repos)
+  hfTokenSecret: ""          # Secret name containing key HF_TOKEN (private repos; also authenticates upstream scan-verdict lookups)
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { cpu: "2", memory: 4Gi }

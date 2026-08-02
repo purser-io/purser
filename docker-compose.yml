@@ -61,7 +61,9 @@ services:
       PURSER_API_KEY: ${PURSER_API_KEY:-}
       PURSER_ENABLE_HF: "1"
       PURSER_HF_ALLOWLIST: ""     # scope to org/ prefixes in production
-      # HF_TOKEN: ${HF_TOKEN}          # for private HuggingFace repos
+      # HF_TOKEN: ${HF_TOKEN}          # private HF repos; also auths upstream scan-verdict lookups
+      # PURSER_SIGNALS: "0"            # opt out of upstream-verdict ingestion (fully offline)
+      # PURSER_CARD_ATTESTATIONS: "1"  # opt-in model-card / eval-attestation gate
     volumes:
       - ./policies:/policies:ro
     read_only: true

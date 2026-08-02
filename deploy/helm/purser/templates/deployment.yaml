@@ -25,7 +25,9 @@ spec:
         {{- include "purser.podAnnotations" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "purser.serviceAccountName" . }}
-      automountServiceAccountToken: false
+      # The SA token is only needed (and only mounted) when auto-approval
+      # writes the approvals ConfigMap through the Kubernetes API.
+      automountServiceAccountToken: {{ and .Values.admission.enabled .Values.admission.autoApprove.enabled }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -49,6 +51,18 @@ spec:
               value: "1"
             - name: PURSER_DEEP_URL
               value: http://{{ include "purser.fullname" . }}-deep:8090
+            {{- end }}
+            {{- if and .Values.admission.enabled .Values.admission.autoApprove.enabled }}
+            - name: PURSER_AUTO_APPROVE
+              value: "1"
+            - name: PURSER_AUTO_APPROVE_VERDICTS
+              value: {{ .Values.admission.autoApprove.verdicts | quote }}
+            - name: PURSER_APPROVALS_CONFIGMAP
+              value: {{ include "purser.fullname" . }}-admission-approved
+            - name: PURSER_APPROVALS_CONFIGMAP_KEY
+              value: approved-digests.txt
+            - name: PURSER_APPROVALS_NAMESPACE
+              value: {{ .Release.Namespace }}
             {{- end }}
           startupProbe:
             httpGet: { path: /healthz, port: http }

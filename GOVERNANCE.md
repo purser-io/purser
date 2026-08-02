@@ -14,13 +14,19 @@ are), [`OWNERS`](OWNERS) (machine-readable approver/reviewer list),
 
 ## 1. Mission and scope
 
-Purser is a **static** security scanner for machine-learning model artifacts. It
-detects malicious code and data-exfiltration indicators and enforces
-policy-based supply-chain controls **without ever deserializing or executing a
-model**. In scope: byte/opcode/AST/structural analysis of model files, a policy
-engine, verified provenance, and the CLI / REST API / container / Kubernetes
-delivery around them. Out of scope is captured in
-[`SECURITY.md`](SECURITY.md) (threat model) and [`ROADMAP.md`](ROADMAP.md).
+Purser is the open-source **model supply-chain control plane**: a policy,
+provenance, and enforcement layer for machine-learning model artifacts. It
+ingests **signals** — its own **static, never-execute** scanner
+(byte/opcode/AST/structural analysis), the `purser-deep` companion, verified
+provenance (Ed25519/Sigstore), upstream scanner verdicts, and third-party
+sources via the `purser.signals` plugin interface — and renders one policy
+verdict enforced in CI, via the REST API, and at Kubernetes admission, all
+**without ever deserializing or executing a model**. In scope:
+byte/opcode/AST/structural analysis of model files, the policy engine, signal
+ingestion and the plugin interface, verified provenance, admission/CI
+enforcement, and the CLI / REST API / container / Kubernetes delivery around
+them. Out of scope is captured in [`SECURITY.md`](SECURITY.md) (threat model)
+and [`ROADMAP.md`](ROADMAP.md).
 
 ## 2. Principles
 
@@ -29,10 +35,13 @@ Decisions are weighed against these, in tension order:
 1. **Never execute a model.** The no-load guarantee is inviolable; no feature
    may deserialize or run untrusted model content.
 2. **Low false-positive rate.** A detection that floods users with noise is a
-   regression; new detection logic must hold the benchmark's measured FPR.
-3. **Defense-in-depth, honestly scoped.** A PASS means "clear of known malicious
-   content," not "certified safe" — claims stay calibrated to what static
-   analysis can prove.
+   regression; new detection logic — and any new **signal source** — must hold
+   the benchmark's measured FPR.
+3. **Defense-in-depth, honestly scoped.** A PASS verdict means "clear of known
+   malicious content across the enabled signals," not "certified safe" — claims
+   stay calibrated to what static analysis and attested claims can prove.
+   Signals may only *add* findings: an external "safe" verdict never downgrades
+   or masks what Purser's own analysis found.
 4. **Transparency.** Design decisions, security posture, and residual risk are
    documented in the open.
 
@@ -69,8 +78,10 @@ raises a substantive, unresolved objection.
 
 - **Routine changes** (bug fixes, tests, docs, incremental detection depth) are
   decided in the pull request. Merge requires the review bar in §5.
-- **Substantial changes** (new detection engines, policy-model changes, public
-  API or CLI changes, security-relevant behavior, dependencies, governance)
+- **Substantial changes** (new detection engines, new signal sources or changes
+  to how signals affect the verdict, admission-enforcement behavior,
+  policy-model changes, public API or CLI changes, security-relevant behavior,
+  dependencies, governance)
   should start as a GitHub issue describing the motivation and approach. Allow at
   least **7 days** for maintainer/community feedback before merging, unless it is
   an urgent security fix.
@@ -88,8 +99,9 @@ Every change to `main` must:
 - pass **CI** — `ruff`, `pytest` on Python 3.11–3.14, Helm lint, the image build
   + Trivy scan, dependency-review, and CodeQL;
 - include **tests** for new behavior — per [`CONTRIBUTING.md`](CONTRIBUTING.md),
-  new detection logic needs both a malicious and a benign fixture, and must not
-  regress the measured false-positive rate;
+  new detection logic needs both a malicious and a benign fixture, a new signal
+  source needs offline (mocked-endpoint) tests covering both its findings and
+  its failure path, and neither may regress the measured false-positive rate;
 - receive approval from at least **one maintainer** (or an area reviewer plus a
   maintainer) who is **not** the author. Once there is more than one maintainer,
   authors do not merge their own changes without a second approval.

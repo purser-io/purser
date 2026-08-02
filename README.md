@@ -4,30 +4,51 @@
 
 # Purser
 
-**ML model security scanner with policy-based supply-chain controls.**
+**The open-source model supply-chain control plane: policy, provenance, and
+enforcement for ML model artifacts — from CI to Kubernetes admission.**
 
 [![CI](https://github.com/purser-io/purser/actions/workflows/ci.yml/badge.svg)](https://github.com/purser-io/purser/actions/workflows/ci.yml)
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-353%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
 
 </div>
 
-Purser statically scans machine-learning model artifacts for malicious
-code and data-exfiltration indicators — taking the best-of-breed techniques
-from open-source scanners (modelscan, picklescan) and extending them — and
-enforces **user-defined policies**: restrict models by **country of origin**,
-**publisher**, **name**, or **model format/type**. Ships as a CLI, a REST API,
-container images, and Kubernetes manifests.
+Purser is the **clearance desk** for models entering your environment: it
+gathers signals about a model artifact, evaluates them against a
+**user-defined policy**, and renders one verdict — `PASS` / `WARN` / `FAIL` /
+`BLOCKED` — that it **enforces in CI and at Kubernetes admission**. Policy can
+restrict models by **country of origin**, **publisher**, **name**, **model
+format/type**, or **signer identity**, and require verified provenance
+(`require_signed`). Ships as a CLI, a REST API, container images, a Helm
+chart, and a `ValidatingAdmissionWebhook`.
 
-Nothing is ever deserialized or executed: all analysis is byte- and
-opcode-level. Format is detected by **content (magic bytes), not the filename**,
-so renaming a payload to a benign-looking extension doesn't evade the scan — a
-pickle disguised as `model.onnx`, or hidden under a `README.md`, is still caught.
+Scanning is one *input* to that verdict, not the product. Signals feeding the
+policy engine today:
+
+- a built-in **static scanner** — malicious code and data-exfiltration
+  indicators across ~35 model formats, taking the best-of-breed techniques
+  from open-source scanners (modelscan, picklescan) and extending them;
+- **verified provenance** — Ed25519 model signing with a trust store and
+  revocation, plus offline **Sigstore** (Fulcio/Rekor) identity verification;
+- the optional **deep-analysis companion** (`purser-deep`) — pickle
+  gadget-chain heuristics and weight tampering/steganography;
+- **upstream & third-party signals** — the HuggingFace Hub's own scan
+  verdicts, refreshable **loader-CVE intel** (`purser update-intel`), an
+  opt-in model-card/eval-attestation gate, and any feed you plug in via the
+  `purser.signals` interface (an upstream *safe* never downgrades Purser's
+  own verdict — see
+  [Signal sources](#signal-sources-upstream-intelligence)).
+
+The core never loads a model: nothing is deserialized or executed, all
+analysis is byte- and opcode-level. Format is detected by **content (magic
+bytes), not the filename**, so renaming a payload to a benign-looking
+extension doesn't evade the scan — a pickle disguised as `model.onnx`, or
+hidden under a `README.md`, is still caught.
 
 > [!TIP]
 > **New here?** Start with the plain-language [user guides](docs/): one for
@@ -44,8 +65,8 @@ pickle disguised as `model.onnx`, or hidden under a `README.md`, is still caught
 - [Using Purser](#using-purser) · [What it detects](#what-it-detects) · [How Purser compares](#how-purser-compares)
 - [Policy engine](#policy-engine) · [Verified provenance](#verified-provenance-model-signing) · [Authentication](#authentication-and-api-keys)
 - [Install & CLI](#install-and-cli-usage) · [REST API](#rest-api) · [Observability](#observability)
-- [Docker](#docker) · [Kubernetes](#kubernetes) · [Deep analysis](#deep-analysis-optional-companion) · [Supply chain](#supply-chain-of-purser-itself)
-- [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [License](#license)
+- [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
+- [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [Contributing](#contributing) · [License](#license)
 
 ## Using Purser
 
@@ -103,6 +124,10 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 
 ## What it detects
 
+*This table is the built-in static scanner's surface — one signal. See
+[Deep analysis](#deep-analysis-optional-companion) and
+[Signal sources](#signal-sources-upstream-intelligence) for the others.*
+
 | Engine | Formats | Detections |
 |---|---|---|
 | Pickle opcode analysis | `.pkl` `.pt` `.pth` `.bin` `.ckpt` `.joblib` `.dill` `.pdparams` | Dangerous imports (`os`, `subprocess`, `eval`, `socket`, `requests`, …) via GLOBAL **and** STACK_GLOBAL resolution, multi-pickle streams, REDUCE invoked-on-load tracking, unknown-import safelist tier, unparseable/evasive pickles |
@@ -132,15 +157,19 @@ HuggingFace model (add `HF_TOKEN` as a masked variable for private repos); add
 
 ## How Purser compares
 
-Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limited ·
-❌ no · ❔ not public. Best-effort assessment of publicly documented features as of
-**July 2026** — projects evolve; verify before relying on a cell.
+Where Purser sits *relative to* the ML model scanners: these tools are point
+analyzers, Purser is the control plane above them — several are things Purser
+can **ingest** rather than compete with (the Hub runs picklescan and Guardian;
+their verdicts arrive as signals on `hf://` scans). The comparison below is on
+the scanning axis only. Legend: ✅ yes · ◐ partial/limited ·
+❌ no · ❔ not public. Best-effort assessment of publicly documented features,
+re-verified **August 2026** — projects evolve; verify before relying on a cell.
 
 | Capability | **Purser** | picklescan | Fickling | ModelScan | ModelAudit | Commercial¹ |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | License | Apache-2.0 | OSS | OSS | OSS | OSS | Commercial |
 | Pickle opcode malware scan | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Format breadth² | ✅ 35+ | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 30+ | ✅ |
+| Format breadth² | ✅ ~35 | ◐ 4 | ❌ pickle only | ◐ 3 | ✅ 40+ | ✅ |
 | Safetensors / GGUF / ONNX / TFLite | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Data-exfil & secret detection³ | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
 | `trust_remote_code` Python (AST) + `auto_map` | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
@@ -149,13 +178,18 @@ Where Purser sits among ML model scanners. Legend: ✅ yes · ◐ partial/limite
 | Cryptographic signing / verified provenance⁴ | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | CLI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | REST API server | ✅ | ❌ | ❌ | ❌ | ◐ | ✅ |
-| SARIF output | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
+| SARIF output | ✅ | ❌ | ❌ | ❌ | ✅ | ◐ |
 | Docker + Kubernetes deploy | ✅ | ❌ | ❌ | ❌ | ◐ | ◐ |
 | Deploy-time enforcement (CI action + K8s admission webhook) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
-| CVE feeds / behavioral backdoor / dashboards | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Ingests upstream/third-party scanner verdicts (plugin signals) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
+| Known-bad denylist (content hashes + publisher globs, offline refresh) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Loader-CVE intel (declared framework version → known load-time RCE, refreshable) | ✅⁵ | ❌ | ❌ | ❌ | ◐ | ✅ |
+| Live threat feeds / behavioral backdoor / dashboards | ❌⁵ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
-¹ Protect AI **Guardian** (built on ModelScan) and **HiddenLayer Model Scanner** —
-enterprise platforms; capabilities vary and are gated behind licensing.
+¹ Protect AI **Guardian** (built on ModelScan; Protect AI is now part of
+**Palo Alto Networks** — Prisma AIRS, acquisition completed July 2025) and
+**HiddenLayer Model Scanner** — enterprise platforms; capabilities vary and
+are gated behind licensing.
 ² ~35 distinct formats identified and policy-gated — a dedicated scanner where the
 format carries code/graph (pickle, Keras, ONNX, TF, GGUF, CoreML, OpenVINO, Caffe,
 TorchServe `.mar`, MLflow, …), and format-ID + exfil for data-only blobs (GGML,
@@ -170,12 +204,22 @@ exfiltration strings.
 binds keys to publisher + country (with revocation/validity), **and Sigstore
 (Fulcio/Rekor) bundles** for verified external-root identity (offline). Commercial
 tools track provenance/lineage (AIBOM) but not user-controlled signature verification.
+⁵ The loader-CVE dataset is **model-scoped and refreshable like AV
+signatures**: regenerated weekly from OSV.dev (human-reviewed PR), and end
+users pull updates without upgrading via `purser update-intel` (ModelAudit's
+◐: CVE-aware checks ship with its releases, no separate refresh channel).
+External feeds can also plug in as
+[signal sources](#signal-sources-upstream-intelligence). The ❌ below stays
+honest for *live/subscription push* feeds, behavioral detection, and
+dashboards — enterprise-platform territory.
 
 **Honest take:** Purser's edge is the combination of broad format coverage, the
-exfiltration engine, `trust_remote_code` AST analysis, and a **policy + verified-
-provenance** layer (country-of-origin, model signing) in one OSS tool with API/K8s
-deployment. It is *not* a substitute for commercial platforms where you need CVE/
-threat-intel feeds, ML-behavioral backdoor detection, dashboards, or vendor support;
+exfiltration engine, `trust_remote_code` AST analysis, and a **policy +
+verified-provenance + enforcement** layer (country-of-origin, model signing,
+CI/admission gating) that also *aggregates* other analyzers' verdicts as
+signals — in one OSS tool. It is *not* a substitute for commercial platforms
+where you need live threat-intel subscriptions, ML-behavioral backdoor
+detection, dashboards, or vendor support;
 and **ModelAudit** is an excellent, more mature pure-scanner alternative if you don't
 need policy/provenance. All static scanners — this one included — can be evaded by
 novel pickle gadgets; treat a clean scan as
@@ -183,7 +227,9 @@ necessary, not sufficient.
 
 > **Reproducible numbers.** These rows aren't just asserted — a head-to-head
 > harness runs Purser and the OSS peers over a shared known-answer corpus and
-> publishes detection / miss / false-positive figures; see
+> publishes detection / miss / false-positive figures: **100% detection on the
+> known-answer set and 0% false positives across 79 benign artifacts (75 real
+> HuggingFace models)** as last measured; see
 > [`benchmarks/`](benchmarks/README.md#latest-measured). A weekly CI job
 > re-measures and fails on any regression.
 
@@ -212,6 +258,12 @@ models:                     # block/allow by model NAME (glob, case-insensitive)
     - "evilcorp/*"          #   and the scan target's basename
     - "*-backdoor"
     - "known-cve-model"
+denylist:                   # known-bad IOCs — any match is BLOCKED
+  hashes: ["sha256:<hex>"]  # exact file-content SHA-256s
+  publishers: ["evil-*"]    # publisher globs
+  models: ["*/nullif-ai*"]  # repo/name globs
+  files: [/feeds/bad.txt]   # external hash feeds (one digest per line),
+                            #   re-read every scan — refresh like AV signatures
 max_file_size_mb: 51200
 rules:                      # per-rule overrides
   - id: PICKLE_UNKNOWN_IMPORT
@@ -229,6 +281,14 @@ denied per policy.
 model's repo id (full and last component) and the scan target's basename. For a
 local file/dir, tag it with `--repo-id org/name` so name policies apply:
 `purser scan ./model --repo-id evilcorp/badmodel`.
+
+**Known-bad denylist** (the `denylist` block) is the AV-signature analogue for
+model artifacts: exact content hashes, publisher globs, and repo globs that
+always `BLOCK`. `denylist.files` points at external feed files (bare hex or
+`sha256:` lines, `#` comments) that are **re-read on every scan**, so an
+updated feed — a remounted ConfigMap, a synced IOC list — takes effect without
+a policy reload. Populate it from upstream `unsafe` verdicts, incident
+response, or your own curation.
 
 Example policies live in [`policies/`](policies/): `default.yaml`,
 `strict.yaml`, `allowlist-us-eu.yaml`, `signed-only.yaml`.
@@ -291,7 +351,7 @@ identity:
 Refresh the vendored trust root if Sigstore rotates its roots:
 `make sigstore-trust-root` (needs `purser[sigstore]` + network). Signing stays
 external — keyless signing needs a browser/OIDC flow. Legacy HuggingFace **GPG
-commit** signatures are online-only and out of scope for the offline scanner.
+commit** signatures are online-only and out of scope for offline verification.
 
 ## Install and CLI usage
 
@@ -302,11 +362,12 @@ Purser ships on two channels — the **PyPI package** (with optional extras) and
 
 | Extra | Adds | Enables |
 |---|---|---|
-| *(none)* | core scanner, CLI, REST API | scanning + policy |
+| *(none)* | core scanner, CLI, REST API | scanning + policy + signal sources + admission webhook |
 | `sign` | `cryptography` | Ed25519 signing / verification |
 | `sigstore` | `sigstore` | verified-identity (Fulcio/Rekor) provenance |
-| `hf` | `huggingface_hub` | `purser scan hf://org/model` |
+| `hf` | `huggingface_hub` | `purser scan hf://org/model` (+ upstream-verdict signals) |
 | `h5` | `h5py` | deeper Keras `.h5` parsing |
+| `deep` | *(no extra deps)* | gadget-chain / weight-tampering analyzers in-process |
 
 Extras combine, e.g. `pip install "purser[sign,hf]"`.
 
@@ -330,6 +391,7 @@ purser scan model.pkl --origin CN --format json -o report.json
 purser scan model.pkl --format sarif > report.sarif                     # CI integration
 purser policy-check policies/strict.yaml
 purser origins deepseek-ai
+purser update-intel                    # refresh loader-CVE intel (no upgrade needed)
 ```
 
 Exit codes: `0` pass/warn · `1` findings ≥ fail threshold · `2` blocked by
@@ -375,6 +437,18 @@ curl -H "X-API-Key: $PURSER_API_KEY" \
 | `PURSER_HF_ALLOWLIST` | *(empty)* | Comma-separated `org/` or `org/repo` prefixes permitted for the HF endpoint once enabled. |
 | `PURSER_ENABLE_DEEP` | `0` | Must be `1`/`true` to run the deep-analysis companion (see below). |
 | `PURSER_DEEP_URL` | *(empty)* | Base URL of the `purser-deep` service. If enabled but empty, the core runs the analyzers in-process when the package is importable. |
+| `PURSER_SIGNALS` | `1` | Disables all [signal sources](#signal-sources-upstream-intelligence) when falsy (`0`/`false`/`no`/`off`). Network-using built-ins run only on hub-fetched scans; the offline `loader-cves` source runs on every scan; third-party plugins decide their own applicability. |
+| `PURSER_SIGNAL_<NAME>` | `1` | Per-source gate, name upper-cased with `-`/`.` → `_` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`). |
+| `PURSER_SIGNAL_TIMEOUT_SECONDS` | `10` | HTTP timeout per signal-source request. |
+| `PURSER_SIGNAL_CACHE_TTL` | `300` | Seconds to cache hub verdict lookups for mutable refs (`main`); a 40-hex commit-sha revision caches for the process lifetime. `0` disables. Failures are never cached. |
+| `PURSER_ATLAS` | `1` | `0` disables [MITRE ATLAS](https://atlas.mitre.org) technique tags (`atlas:AML.T####`) appended to findings. |
+| `PURSER_LOADER_CVES` | *(vendored)* | Path to a loader-CVE dataset that replaces both the vendored one and any `update-intel` copy — full operator control (air-gap distribution). |
+| `PURSER_INTEL_URL` | *(project repo)* | URL `purser update-intel` fetches the dataset from — point at an internal mirror. |
+| `PURSER_INTEL_DIR` | `~/.purser` | Where `update-intel` installs the dataset (scans prefer it over the vendored copy). |
+| `PURSER_CARD_ATTESTATIONS` | `0` | `1`/`true`/`yes`/`on` enables the opt-in model-card / eval-attestation gate on hub scans. Distinct from the generic per-source gate `PURSER_SIGNAL_CARD_ATTESTATIONS` — both must be enabled for the gate to run. |
+| `PURSER_AUTO_APPROVE` | `0` | `1` auto-populates the admission webhook's approved-digest list from verdicts: verdicts in `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's sha256; FAIL/BLOCKED revokes. |
+| `PURSER_APPROVALS_PATH` | *(unset)* | File backend for auto-approval (the exact format the webhook reads — commit/sync it into the ConfigMap via GitOps). |
+| `PURSER_APPROVALS_CONFIGMAP` | *(unset)* | In-cluster backend: name of the ConfigMap to patch via the K8s API (ServiceAccount token; the Helm chart's `admission.autoApprove.enabled` wires this + RBAC). Also: `_KEY` (default `approved.txt`), `_NAMESPACE`. |
 | `PURSER_SCAN_ROOT` | `/models` | Path-scan confinement root. |
 | `PURSER_METRICS_ENABLED` | `1` | `0`/`false` disables the `/metrics` endpoint. |
 | `PURSER_AUDIT` | `off` | `stdout` or `syslog` to emit a JSON audit record per scan. |
@@ -410,7 +484,7 @@ security dashboard:
   static_configs: [{ targets: ["purser:8080"] }]
 ```
 
-Label cardinality is bounded (verdicts, severities, ~36 formats, ~20 categories,
+Label cardinality is bounded (verdicts, severities, ~35 formats, ~20 categories,
 ISO country codes). `/metrics` is unauthenticated by design (scrapers usually
 are) — **network-restrict it** or disable with `PURSER_METRICS_ENABLED=0`.
 
@@ -546,6 +620,105 @@ a strong second opinion, not a gate on their own. They do **not** detect
 model-evaluation tooling and stays out of scope. CVE feeds and volumetric-DoS
 protection are also out of scope (use an edge WAF / scanner platform).
 
+## Signal sources (upstream intelligence)
+
+As a control plane, Purser's verdict aggregates **signals** — and external
+intelligence about an artifact plugs into the same policy engine as the
+built-in scanners. Signal findings appear as `signal_findings` in the report,
+count toward the verdict, and can be tuned per rule with the normal policy
+`rules:` overrides.
+
+**Built-in: HuggingFace Hub scan verdicts** (`hf-verdicts`). When scanning an
+`hf://` target (CLI) or via `POST /v1/scan/huggingface`, Purser also reads the
+Hub's own per-file scan verdicts (the Hub runs picklescan, ClamAV, Protect AI
+Guardian, JFrog, and VirusTotal over uploads) and surfaces any upstream
+`unsafe` / `caution` verdict as a corroborating finding
+(`HF_UPSTREAM_UNSAFE` HIGH / `HF_UPSTREAM_SUSPICIOUS` MEDIUM), recording
+which upstream scanners flagged the file as evidence:
+
+```bash
+purser scan hf://org/model        # Purser's own analysis + the Hub's verdicts
+```
+
+Two rules keep this honest:
+
+- **Upstream `unsafe` is a signal; upstream `safe` is not.** Hub scanners have
+  documented false negatives, so a clean upstream verdict never downgrades or
+  masks what Purser's own analysis found.
+- **No new network paths from the built-ins.** The built-in sources only run
+  when the artifact was fetched from a hub in the first place (the `-hf` path,
+  where network is already gated); plain local scans stay fully offline. If
+  verdicts can't be fetched, the gap is visible as a `SIGNAL_UNAVAILABLE`
+  finding rather than silently missing coverage. Third-party plugins you
+  install can add their own network paths — audit a plugin before enabling it,
+  and pin `PURSER_SIGNAL_<NAME>=0` for any you don't want.
+
+**Built-in: model-card / eval-attestation gate** (`card-attestations`,
+**opt-in**: `PURSER_CARD_ATTESTATIONS=1`). For organizations that want models
+to *document themselves*: on hub scans it checks the declared model card and
+`model-index` eval results and surfaces their **absence** as LOW findings
+(`CARD_MISSING`, `CARD_NO_EVAL_RESULTS`) — a WARN-level nudge by default that
+policy `rules:` can `ignore` or escalate to `deny` (undocumented model →
+`BLOCKED`). It gates the *attestation*, not the behavior: declared metrics are
+claims, not proof of safety, and presence of a card never improves a verdict.
+
+**Built-in: loader-CVE mapping** (`loader-cves`, **offline** — the first
+signal that runs on *local* scans too). No feed of malicious models exists,
+but framework loader CVEs are public: when an artifact **declares** a
+framework version — `keras_version` in a `.keras`/`.h5` file, or
+`transformers_version` in an HF `config.json` — that falls in the affected
+range of a known load-time vulnerability, one aggregated LOW `LOADER_CVE`
+advisory is emitted per file (all matched CVEs in evidence, plus the
+`clear_at` version that clears every range). The vendored dataset
+(`purser/data/loader_cves.yaml`) is **model-scoped by construction** — only
+packages whose version an artifact can declare, only load-time CWEs
+(deserialization / code-exec / traversal / load-bombs; ReDoS-class noise is
+filtered out) — and is **refreshed from OSV.dev on a weekly cadence**
+(`make loader-cves` locally; a scheduled workflow opens a human-reviewed PR
+on drift). Operators can point `PURSER_LOADER_CVES=/path/dataset.yaml` at a
+fresher copy without upgrading. It fires only on a declared in-range
+version — never as blanket per-format noise — and says plainly that the
+*loader* is what's exposed, not that the artifact is malicious.
+
+**Staying updated (end users).** The vendored dataset is frozen at release
+time; refresh it *without upgrading Purser*:
+
+```bash
+purser update-intel            # fetch + validate + install to ~/.purser/
+purser update-intel --check    # show the active dataset's source and age
+```
+
+Scans **never** fetch — this command is the only network path, the fetched
+file is schema-validated before install (a bad fetch leaves the previous
+dataset in place), and scans prefer the updated file automatically
+(`PURSER_LOADER_CVES` env → `~/.purser/` → vendored). When the active dataset
+is >90 days old, table-format scans print a one-line hint. Air-gapped: point
+`PURSER_INTEL_URL` at an internal mirror, or distribute the file yourself via
+`PURSER_LOADER_CVES` (in Kubernetes, a mounted ConfigMap). Run
+`purser update-intel` on a cron/CI schedule for a fleet.
+
+**Writing your own.** Third-party sources register via the `purser.signals`
+entry-point group — expose a zero-arg factory returning an object with
+`name`, `available(ctx)`, and `collect(ctx) -> list[Finding]`:
+
+```toml
+# your plugin's pyproject.toml
+[project.entry-points."purser.signals"]
+my-feed = "my_pkg.purser_plugin:MyFeedSource"
+```
+
+Sources must never raise (report trouble as a finding), and may only *add*
+findings — a source cannot suppress another signal or downgrade the verdict.
+Disable all sources with `PURSER_SIGNALS=0`, or one with
+`PURSER_SIGNAL_<NAME>=0` (e.g. `PURSER_SIGNAL_HF_VERDICTS=0`).
+
+**MITRE ATLAS tags.** Every finding is also tagged with the
+[MITRE ATLAS](https://atlas.mitre.org) technique it evidences
+(`atlas:AML.T0011` unsafe ML artifacts, `AML.T0025` exfiltration,
+`AML.T0018` backdoored model, `AML.T0010.003` supply-chain: model) from a
+vendored mapping — enrichment for SARIF/SOC pipelines, not a signature
+source. `PURSER_ATLAS=0` turns it off.
+
 ## Supply chain (of Purser itself)
 
 A security tool should be verifiable. `make` targets and `.gitlab-ci.yml` cover:
@@ -595,6 +768,15 @@ declares (annotation `purser.io/models`) is on the **approved-digest** list — 
 SHA-256s of models that passed a scan. Opt-in per namespace/pod and fail-closed
 by default; see the [chart README](deploy/helm/purser/README.md#admission-webhook-deploy-time-enforcement).
 
+**Closing the loop (`admission.autoApprove.enabled=true`).** The approved list
+can populate itself from verdicts instead of being operator-managed: a `PASS`
+at any scan endpoint approves each scanned file's digest into the webhook's
+ConfigMap (narrow RBAC — get/patch on that one ConfigMap), and a later
+`FAIL`/`BLOCKED` on the same artifact **revokes** it. Scan → approve → admit,
+with no manual hop; every action is recorded in the report's
+`metadata.approvals` and the audit log. Outside Kubernetes the same mechanism
+writes a file (`PURSER_APPROVALS_PATH`) you can GitOps into the ConfigMap.
+
 ## Security model
 
 - Models are **never loaded**: pickle streams are analyzed with
@@ -609,6 +791,15 @@ by default; see the [chart README](deploy/helm/purser/README.md#admission-webhoo
   off-by-default, allowlist-scoped HuggingFace download endpoint.
 - **Provenance** can be cryptographically verified (Ed25519 signing + trust
   store); a `require_signed` policy makes country-of-origin an enforced control.
+- **Signals are add-only and untrusted.** A signal source can only *add*
+  findings — the plugin context deliberately excludes the in-progress report,
+  so no signal can suppress or downgrade another finding. Signal responses are
+  parsed as JSON, never executed; the built-ins make network calls only on
+  hub-fetched scans; third-party plugins are operator-installed code
+  (audit before enabling).
+- **Deploy-time enforcement fails closed.** The admission webhook defaults to
+  `failurePolicy: Fail` and is opt-in per namespace — an outage blocks
+  opted-in deploys rather than waving them through.
 - A finding severity model (`INFO → CRITICAL`) feeds the policy verdict:
   `PASS / WARN / FAIL / BLOCKED / ERROR`.
 - Honest limits: static
@@ -626,9 +817,11 @@ pytest
 
 - [`CHANGELOG.md`](CHANGELOG.md) — released versions and what each one shipped.
 - [`ROADMAP.md`](ROADMAP.md) — what's next and why (foundation readiness: CNCF
-  Landscape entry + OpenSSF badge; Wolfi base auto-refresh). The external-PKI/
-  Sigstore trust root, per-format scanner depth, and the adversarial evasion
-  benchmark have shipped.
+  Landscape entry — the OpenSSF Best Practices badge is already **earned**;
+  the `purser-eval` companion; Wolfi base auto-refresh). The external-PKI/
+  Sigstore trust root, per-format scanner depth, the adversarial evasion
+  benchmark, the pluggable signal sources (`purser.signals`), and the
+  Kubernetes admission webhook have shipped.
 - [`SECURITY.md`](SECURITY.md) — disclosure policy + SME security evaluation of
   the code and container images (threat model, hardening, residual risk).
 - [`docs/openssf-best-practices.md`](docs/openssf-best-practices.md) — OpenSSF

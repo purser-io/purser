@@ -56,6 +56,10 @@ MarketResearch.md
 next-steps.md
 foundation-strategy.md
 detection-catalog.md
+product-strategy.md
+# pitch-deck exports (the .key source is already covered by *.key above)
+Purser-Pitch-Deck.pptx
+docs/Purser-Pitch-Deck.pptx
 
 # fickling --check-safety byproduct (peer-scanner comparison runs)
 safety_results.json

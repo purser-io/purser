@@ -6,7 +6,105 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
+### Changed
+- **Repositioned as a model supply-chain control plane.** README, roadmap,
+  package/CLI/API descriptions now lead with what differentiates Purser —
+  policy + provenance + enforcement across CI and Kubernetes admission, with
+  scanning as one signal input. No functional change; the never-execute
+  guarantee and "clean scan ≠ safe" scope statements are unchanged.
+
 ### Added
+- **Pluggable signal sources (`purser.signals`).** External intelligence about
+  a scanned artifact now plugs into the policy engine as a first-class signal:
+  findings land on a new `signal_findings` report channel, count toward the
+  verdict, honor policy `rules:` overrides, and third-party sources register
+  via the `purser.signals` entry-point group (a plugin that fails to load
+  surfaces as a `SIGNAL_UNAVAILABLE` coverage-gap finding, never an error).
+  Gates: `PURSER_SIGNALS=0` (all), `PURSER_SIGNAL_<NAME>=0` (per source),
+  `PURSER_SIGNAL_TIMEOUT_SECONDS` (default 10).
+- **HuggingFace upstream scan-verdict ingestion** (signal source
+  `hf-verdicts`). Scans on the `-hf` path (`hf://` targets,
+  `POST /v1/scan/huggingface`) also read the Hub's own scan results
+  (`securityRepoStatus` via `?securityStatus=true`, per-scanner detail via
+  `paths-info` — verified against the live API) — inheriting its picklescan /
+  ClamAV / Protect AI / JFrog / VirusTotal scans — and surface upstream
+  `unsafe` / `caution` as corroborating `HF_UPSTREAM_UNSAFE` (HIGH) /
+  `HF_UPSTREAM_SUSPICIOUS` (MEDIUM) findings, with the flagging scanners
+  recorded as evidence. An upstream `safe` verdict never downgrades Purser's
+  own analysis, and plain local scans remain fully offline
+  (regression-tested). Honors `HF_ENDPOINT` and `HF_TOKEN`.
+- **Model-card / eval-attestation gate** (signal source `card-attestations`,
+  opt-in via `PURSER_CARD_ATTESTATIONS=1`) — the first `purser-eval` slice,
+  static by design. On hub scans it reads the declared model card and
+  `model-index` eval results and reports their *absence* (`CARD_MISSING`,
+  `CARD_NO_EVAL_RESULTS`, both LOW) so policy can require documented models
+  (`rules: {id: CARD_MISSING, action: deny}` blocks them). Attestation
+  presence is deliberately not a finding and never improves a verdict.
+- **MITRE ATLAS technique tagging** (`core/atlas.py`, `PURSER_ATLAS=0` to
+  disable). Findings carry `atlas:AML.T####` tags from a vendored rule-id →
+  technique mapping (`data/atlas_map.yaml`): unsafe-artifact rules →
+  AML.T0011, exfiltration → AML.T0025, deep gadget/stego → AML.T0018, plus
+  the AML.T0010.003 supply-chain umbrella. Additive enrichment only — tags
+  are appended so the metrics category (first tag) is unchanged.
+- **Hub verdict-lookup caching** (`PURSER_SIGNAL_CACHE_TTL`, default 300 s).
+  `hf-verdicts` lookups are cached per process: immutable 40-hex commit-sha
+  revisions for the process lifetime, mutable refs for the TTL; failures and
+  incomplete upstream scans are never cached, and cache hits return copies,
+  never shared finding objects.
+- **Loader-CVE mapping** (signal source `loader-cves`, **offline** — the
+  first signal that runs on local scans). Maps the framework version an
+  artifact itself declares — `keras_version` in `.keras`/`.h5`, or
+  `transformers_version` in an HF `config.json` — to a vendored,
+  **model-scoped** dataset of load-time vulnerabilities regenerated from
+  **OSV.dev** (`scripts/refresh_loader_cves.py`: only tracked loader
+  packages, only load-time CWEs — deserialization/code-exec/traversal/
+  load-bombs; ReDoS-class noise filtered; 21 entries across Keras +
+  transformers at import). One aggregated LOW `LOADER_CVE` advisory per
+  file (matched CVEs in evidence + the `clear_at` version that clears every
+  range) — no blanket per-format noise — stating that the loader, not the
+  artifact, is exposed. Refresh cadence: `make loader-cves` +
+  a weekly workflow (`loader-cve-refresh.yml`) that opens a human-reviewed
+  PR with the filter's keep/skip report on drift; operators can point
+  `PURSER_LOADER_CVES` at a fresher dataset without upgrading. Signals now
+  run on every scan with per-source applicability (network sources still
+  gate to hub scans; local scans still make zero network calls,
+  regression-tested). Benchmarks pin `PURSER_SIGNALS=0` so published
+  numbers keep measuring the static core.
+- **`purser update-intel`** — end-user intel refresh without upgrading.
+  Fetches the latest loader-CVE dataset over HTTPS (`PURSER_INTEL_URL`,
+  default: the project repo; point at an internal mirror when air-gapped),
+  schema-validates it (a bad fetch is rejected and the previous dataset
+  stays), and installs to `~/.purser/` (`PURSER_INTEL_DIR`), which scans
+  prefer over the vendored copy. Scans themselves never fetch; when the
+  active dataset is >90 days old, table-format scans print a one-line
+  `update-intel` hint. `--check` shows the active dataset's source, entry
+  count, and age.
+- **Known-bad denylist policy dimension** (`denylist:` block). Exact
+  file-content SHA-256s, publisher globs, and repo/name globs that always
+  `BLOCK` (`POLICY_DENYLIST_HASH` / `_PUBLISHER` / `_MODEL`), plus
+  `denylist.files` — external hash-feed files re-read on every evaluation so
+  a refreshed feed (remounted ConfigMap, synced IOC list) takes effect
+  without a policy reload. The offline AV-signature analogue for model
+  artifacts; generalizes the existing publisher/name blocklists with content
+  hashes.
+- **Scan→approve→admit loop** (`core/approvals.py`, opt-in
+  `PURSER_AUTO_APPROVE=1`). Verdicts now populate the admission webhook's
+  approved-digest list automatically: verdicts in
+  `PURSER_AUTO_APPROVE_VERDICTS` (default `PASS`) approve each scanned file's
+  SHA-256, and `FAIL`/`BLOCKED` revokes previously-approved digests. Two
+  backends: a plain file (`PURSER_APPROVALS_PATH`, the exact format the
+  webhook reads — GitOps it into the ConfigMap) or an in-cluster ConfigMap
+  patched through the Kubernetes API with the pod's ServiceAccount (stdlib
+  HTTP, no client dependency; Helm `admission.autoApprove.enabled` wires the
+  env + a Role scoped to that one ConfigMap). Every action is surfaced in the
+  report's `metadata.approvals` and audit log; store failures degrade to a
+  recorded error, never a broken scan.
+- **HuggingFace Space live demo** (`demo/hf-space/`, push-ready): Gradio app
+  running the real scanner + policy engine on uploads or Hub repos, with
+  upstream-verdict ingestion; deploy instructions in `DEPLOY.md`.
+- **Launch + foundation docs:** a control-plane launch-post draft
+  (`docs/launch-control-plane.md`) and a CNCF Sandbox application draft with
+  explicit readiness gates (`docs/cncf-sandbox-application.md`).
 - **Dataflow/taint analysis of bundled Python source.** A per-scope,
   intraprocedural taint pass catches trust-remote-code payloads assembled or
   resolved at runtime that a literal call-name match misses: a dangerous callable

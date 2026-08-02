@@ -18,7 +18,8 @@ from the internet can quietly:
 This isn't hypothetical — it's a known attack on the popular "pickle" format
 (used by many PyTorch and scikit-learn files). Purser reads the file
 **without loading it** and tells you if something looks wrong. Think of it like
-antivirus for model files.
+antivirus for model files — plus your team's policy deciding whether the
+result is allowed in.
 
 **Rule of thumb:** scan any model you didn't create yourself before loading it.
 
@@ -95,6 +96,21 @@ HIGH      EXFIL_URL                 Non-allowlisted URL embedded in model data
 
 That first line means the file will run an operating-system command when
 loaded — a strong sign it's malicious.
+
+One more thing you may see on `hf://` scans: findings starting `HF_UPSTREAM_`
+come from **Hugging Face's own scanners** (picklescan, ClamAV, and commercial
+ones), which Purser folds into the verdict as a second opinion. The reverse
+doesn't hold — Hugging Face saying *safe* never clears a model Purser flagged.
+A LOW `SIGNAL_UNAVAILABLE` finding just means that lookup couldn't be made
+(e.g. no network); it's advisory, not a failure.
+
+You may also see a LOW `LOADER_CVE` finding on any scan: the model file
+declares the framework version that made it (e.g. an old Keras), and that
+version's *loader* has a known security bug. The file isn't malicious because
+of this — it's a heads-up to load it with a patched framework version (the
+finding tells you which version clears everything). To keep that CVE
+knowledge current without reinstalling Purser, run `purser update-intel`
+once in a while — Purser will remind you when it's more than ~3 months old.
 
 ---
 

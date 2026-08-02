@@ -1,5 +1,5 @@
-"""Adversarial evasion suite for the Purser validation benchmark (roadmap #1,
-Phase 3).
+"""Adversarial evasion suite for the Purser validation benchmark (Phase 3 of
+the now-complete validation arc).
 
 Where the known-answer corpus (`kat.py`) asks "does Purser flag a plainly
 malicious sample?", this asks the harder question: "does it still flag the
@@ -21,6 +21,8 @@ Payloads are inert (`os.system("true")` etc.) and never executed — Purser only
 inspects bytes. Nothing here is committed; it is generated into work/.
 """
 from __future__ import annotations
+
+import os
 
 import argparse
 import base64
@@ -261,4 +263,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Measure the static core only: keep external signal sources out
+    # of the published numbers (see benchmarks/README.md).
+    os.environ.setdefault("PURSER_SIGNALS", "0")
     raise SystemExit(main())

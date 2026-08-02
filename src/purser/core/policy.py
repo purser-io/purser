@@ -31,6 +31,11 @@ Example:
         - "evilcorp/*"          #   repo id (full + last component) and the
         - "*-backdoor"          #   scan target's basename
         - "known-cve-model"
+    denylist:                   # known-bad IOCs, refreshable like AV signatures
+      hashes: ["sha256:<hex>"]  # content digests — always BLOCKED on match
+      publishers: ["evil-*"]    # publisher globs
+      models: ["*/nullif-ai*"]  # repo/name globs
+      files: [/feeds/bad.txt]   # external hash feeds, re-read every evaluation
     max_file_size_mb: 20000
     rules:
       - id: PICKLE_UNKNOWN_IMPORT
@@ -40,6 +45,7 @@ Example:
 from __future__ import annotations
 
 import fnmatch
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -47,6 +53,8 @@ from typing import Any
 import yaml
 
 from purser.core.findings import Finding, ScanReport, Severity, Verdict
+
+_HEX64 = re.compile(r"(?:sha256:)?([a-fA-F0-9]{64})")
 
 
 class PolicyError(ValueError):
@@ -101,6 +109,10 @@ class Policy:
     identity_patterns: list[str] = field(default_factory=list)  # SAN globs
     models_mode: str = "off"             # off | allowlist | blocklist
     models_patterns: list[str] = field(default_factory=list)
+    denylist_hashes: set[str] = field(default_factory=set)      # SHA-256 hex
+    denylist_publishers: list[str] = field(default_factory=list)  # globs
+    denylist_models: list[str] = field(default_factory=list)      # repo/name globs
+    denylist_files: list[str] = field(default_factory=list)       # external hash feeds
     max_file_size_mb: int = 0            # 0 = unlimited
     rule_overrides: dict[str, str] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
@@ -168,6 +180,16 @@ class Policy:
         p.models_patterns = [str(x).lower() for x in models.get("patterns", [])]
         if p.models_mode != "off" and not p.models_patterns:
             raise PolicyError("models.patterns must be non-empty when models.mode is set")
+
+        denylist = doc.get("denylist") or {}
+        for h in denylist.get("hashes", []) or []:
+            m = _HEX64.search(str(h))
+            if not m:
+                raise PolicyError(f"denylist.hashes entry is not a SHA-256: {h!r}")
+            p.denylist_hashes.add(m.group(1).lower())
+        p.denylist_publishers = [str(x).lower() for x in denylist.get("publishers", []) or []]
+        p.denylist_models = [str(x).lower() for x in denylist.get("models", []) or []]
+        p.denylist_files = [str(x) for x in denylist.get("files", []) or []]
 
         p.max_file_size_mb = int(doc.get("max_file_size_mb", 0))
 
@@ -298,6 +320,42 @@ class Policy:
                     f"names checked: {sorted(names)}",
                 ))
 
+        # -- known-bad denylist (content hashes + publisher/model globs).
+        # The AV-signature analogue: refreshable offline via `denylist.files`
+        # (re-read at evaluate time, so dropping an updated feed file — e.g. a
+        # remounted ConfigMap — takes effect without a policy reload).
+        bad_hashes = self._denylist_hashes()
+        if bad_hashes:
+            for fr in report.files:
+                if fr.sha256 and fr.sha256.lower() in bad_hashes:
+                    blocked = True
+                    policy_findings.append(self._pf(
+                        "POLICY_DENYLIST_HASH", Severity.CRITICAL,
+                        "File content is on the known-bad denylist",
+                        f"file: {fr.path} sha256:{fr.sha256.lower()}",
+                    ))
+        if self.denylist_publishers and publisher:
+            matched = sorted(p for p in self.denylist_publishers
+                             if fnmatch.fnmatch(publisher, p))
+            if matched:
+                blocked = True
+                policy_findings.append(self._pf(
+                    "POLICY_DENYLIST_PUBLISHER", Severity.CRITICAL,
+                    f"Publisher `{publisher}` is on the known-bad denylist",
+                    f"matched pattern(s): {matched}",
+                ))
+        if self.denylist_models:
+            names = _model_names(report)
+            matched = sorted(p for p in self.denylist_models
+                             if any(fnmatch.fnmatch(n, p) for n in names))
+            if matched:
+                blocked = True
+                policy_findings.append(self._pf(
+                    "POLICY_DENYLIST_MODEL", Severity.CRITICAL,
+                    "Model name/repo is on the known-bad denylist",
+                    f"matched pattern(s): {matched}; names checked: {sorted(names)}",
+                ))
+
         # -- format restrictions
         if self.formats_mode != "off":
             for fr in report.files:
@@ -353,6 +411,7 @@ class Policy:
             fr.findings = apply_overrides(fr.findings)
         report.signature_findings = apply_overrides(report.signature_findings)
         report.deep_findings = apply_overrides(report.deep_findings)
+        report.signal_findings = apply_overrides(report.signal_findings)
 
         report.policy_findings = policy_findings
         report.policy_name = self.name
@@ -367,6 +426,28 @@ class Policy:
         else:
             report.verdict = Verdict.PASS
         return report
+
+    def _denylist_hashes(self) -> set[str]:
+        """Inline hashes + external feed files (re-read per evaluation).
+
+        Feed files use the same line format as the admission approved list
+        (bare hex or ``sha256:<hex>``; ``#`` comments). An unreadable feed is
+        skipped — the inline entries still apply.
+        """
+        out = set(self.denylist_hashes)
+        for path in self.denylist_files:
+            try:
+                text = Path(path).read_text()
+            except OSError:
+                continue
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                m = _HEX64.search(line)
+                if m:
+                    out.add(m.group(1).lower())
+        return out
 
     def _pf(self, rule_id: str, severity: Severity, title: str, detail: str = "") -> Finding:
         return Finding(rule_id=rule_id, severity=severity, title=title,
@@ -395,6 +476,12 @@ class Policy:
             "models": {
                 "mode": self.models_mode,
                 "patterns": self.models_patterns,
+            },
+            "denylist": {
+                "hashes": sorted(self.denylist_hashes),
+                "publishers": self.denylist_publishers,
+                "models": self.denylist_models,
+                "files": self.denylist_files,
             },
             "max_file_size_mb": self.max_file_size_mb,
             "rules": [{"id": k, "action": v} for k, v in self.rule_overrides.items()],

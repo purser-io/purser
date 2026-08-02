@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest a detector, format, policy control, or capability.
+description: Suggest a detector, format, signal source, policy control, or enforcement capability.
 labels: ["enhancement"]
 body:
   - type: markdown

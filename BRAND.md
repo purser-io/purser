@@ -21,20 +21,29 @@ market/name research in mind (steer clear of the crowded
   manifest bar ([`assets/brand/purser-mark.svg`](assets/brand/purser-mark.svg),
   [lockup](assets/brand/purser-logo.svg))
 - **Tagline:** *"Nothing boards without clearing the Purser."*
-- **One-liner:** *Purser checks a model's manifest and clearance before it comes
-  aboard your cluster.*
+- **One-liner:** *Purser is the clearance desk for ML models — it weighs the
+  inspectors' reports, verifies the manifest, and decides what comes aboard
+  your cluster.*
 
 ---
 
 ## Why "Purser"
 
 A ship's **purser** keeps the cargo **manifest**, verifies it, and clears cargo
-to come aboard. That maps onto all three things this tool does, in one word:
+to come aboard. Since the control-plane pivot the metaphor fits *better* than
+it did for a scanner: the purser is the **clearance officer** — the one who
+weighs what the inspectors report and renders the decision — not an inspector
+himself:
 
-- **Scan** — inspect the cargo (the model) before it's loaded.
+- **Signals** — the inspectors' reports the purser weighs: our own
+  never-execute scan, the port authority's findings (upstream hub verdicts),
+  the deep survey (`purser-deep`), the cargo's declared papers (model-card
+  attestations).
 - **Provenance / signing** — the keeper of the manifest / bill of lading (our
-  Ed25519 signatures and trust store).
-- **Policy** — the officer who enforces the rules on what's allowed aboard.
+  Ed25519 signatures, Sigstore identity, and trust store).
+- **Policy + enforcement** — the officer who enforces the rules on what's
+  allowed aboard: in CI, at the API, and at the gangway (Kubernetes
+  admission).
 
 Why it fits the constraints:
 
@@ -72,9 +81,12 @@ Why it fits the constraints:
 | `.com` domain | Verify (likely needs `.dev`/`.io` or `getpurser`/`usepurser`) | 🟡 |
 | Semantics | "purser" also = a ship's finance officer | 🟡 faint fintech connotation, harmless here |
 
-**Still required** before adopting in code: a formal **USPTO TESS** search +
-counsel (classes 9 software / 42 SaaS), and reserving PyPI + GitHub org + a
-domain together. The greens are encouraging, not a legal clearance.
+**Historical note (research snapshot, 2026-07):** the "still required before
+adopting" gate below has since been **overtaken by events** — the name is
+adopted and public (PyPI `purser`, the GitHub org, and `purser-io.io` are all
+reserved and live). What genuinely remains is the light **USPTO TESS** search
+to avoid infringing *others* (see `next-steps.md`); a full filing is deferred
+and likely moot given the openness to donating the marks (`GOVERNANCE.md` §10).
 
 ---
 
@@ -133,6 +145,8 @@ Renaming `modelguard` → `purser` across the suite:
 | Env prefix | `MODELGUARD_*` | `PURSER_*` |
 | Signed attestation | signature | keep; may be styled the *bill of lading* |
 | Policy | policy | keep |
+| Signal sources (`purser.signals`) | — *(post-pivot)* | keep the plain term; may be styled the *inspectors' reports* |
+| Admission webhook | — *(post-pivot)* | keep the plain term; may be styled the *gangway check* |
 
 Verdicts (PASS/WARN/FAIL/BLOCKED) and finding IDs stay as-is.
 
@@ -143,7 +157,7 @@ Calm, plain, confident — an officer who clears your cargo, not an alarm.
 - *Nothing boards without clearing the Purser.*
 - *Cleared for loading.*
 - *Check the manifest before it comes aboard.*
-- *The manifest check for AI models.*
+- *The clearance desk for AI models.*
 
 ---
 
@@ -191,8 +205,9 @@ console script (`purser`), the `purser` / `purser_deep` packages, all env vars
 manifests, and the docs. This file intentionally still mentions "ModelGuard"
 as the former name.
 
-**Not yet done (gated on legal review):** publishing to PyPI / a public
-registry, and the trademark filing — see *Owning the name*.
+**Since done:** publishing to PyPI and GHCR (v0.2.1 is live on both). **Not
+done:** the trademark filing — deferred, and likely moot if the marks are
+donated to a foundation (see *Owning the name*).
 
 ---
 

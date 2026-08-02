@@ -49,18 +49,20 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from purser import __version__
-from purser.core import metrics
+from purser.core import approvals, metrics
 from purser.core.env import env_get
 from purser.core.hf import HFNotAvailable, download_repo
 from purser.core.policy import Policy, PolicyError
 from purser.core.provenance import origin_db
 from purser.core.scanner import scan_target
+from purser.signals import SignalContext
 
 MAX_UPLOAD_BYTES = int(env_get("MAX_UPLOAD_MB", "10240")) * 1024 * 1024
 MAX_CONCURRENT_SCANS = int(env_get("MAX_CONCURRENT_SCANS", "4"))
 
 app = FastAPI(title="Purser", version=__version__,
-              description="ML model security scanner with policy-based controls")
+              description="Model supply-chain control plane: policy, provenance, "
+                          "and enforcement for ML model artifacts")
 
 # Bounded concurrency: reject rather than queue so a flood of large uploads
 # can't exhaust memory/disk. Non-blocking acquire -> HTTP 429 when full.
@@ -235,6 +237,7 @@ async def scan_upload(
             report = await run_in_threadpool(
                 scan_target, dest, policy=pol, origin=origin, publisher=publisher
             )
+        approvals.maybe_record(report)
         report.target = safe_name
         for fr in report.files:
             fr.path = Path(fr.path).name
@@ -261,6 +264,7 @@ def scan_path(req: PathScanRequest, _: None = Depends(require_auth),
     with _ScanSlot():
         report = scan_target(target, policy=get_policy(), origin=req.origin,
                              publisher=req.publisher)
+    approvals.maybe_record(report)
     return report.to_dict()
 
 
@@ -294,8 +298,14 @@ def scan_hf(req: HFScanRequest, _: None = Depends(require_auth),
             local = download_repo(req.repo_id, revision=req.revision,
                                   token=os.environ.get("HF_TOKEN"))
             try:
-                report = scan_target(local, policy=get_policy(), origin=req.origin,
-                                     repo_id=req.repo_id)
+                report = scan_target(
+                    local, policy=get_policy(), origin=req.origin,
+                    repo_id=req.repo_id,
+                    signal_context=SignalContext(
+                        repo_id=req.repo_id, revision=req.revision,
+                        source="huggingface"),
+                )
+                approvals.maybe_record(report)
                 report.target = f"hf://{req.repo_id}"
                 return report.to_dict()
             finally:

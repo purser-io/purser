@@ -1,6 +1,6 @@
 # Purser Helm chart
 
-Production-ready chart for **Purser** — the ML model security scanner. Deploys
+Production-ready chart for **Purser** — the model supply-chain control plane. Deploys
 the core scanning service and, optionally, the HuggingFace worker and the
 deep-analysis companion.
 
@@ -40,6 +40,17 @@ rotate on `helm upgrade`).
 | — | NetworkPolicy (`networkPolicy.enabled`) |
 | — | Admission webhook (`admission.enabled`) — deploy-time verdict + digest enforcement |
 
+**Signal sources.** With `hf.enabled`, `hf://` scans also fetch the Hub's own
+scan verdicts as a corroborating signal (outbound calls beyond the download
+itself). Control via env on the worker, e.g.:
+
+```yaml
+config:
+  extraEnv:
+    - { name: PURSER_SIGNALS, value: "0" }            # fully offline
+    - { name: PURSER_CARD_ATTESTATIONS, value: "1" }  # opt-in attestation gate
+```
+
 With `metrics.serviceMonitor.enabled` + `metrics.prometheusRule.enabled` against a
 Prometheus/Grafana stack, importing [`deploy/grafana/purser-overview.json`](../../grafana/purser-overview.json)
 gives a security overview:
@@ -70,6 +81,7 @@ liveness/readiness/startup probes on `/healthz`.
 | `deep.enabled` / `hf.enabled` | `false` | optional companions — deploy the `purser-deep` / `purser-hf` images (see the [distributions table](../../../README.md#install-and-cli-usage) for how these images map to the PyPI extras) |
 | `admission.enabled` | `false` | ValidatingAdmissionWebhook: require image-digest pinning + approved-model digests at deploy time |
 | `admission.approvedDigests` | `[]` | SHA-256s of models that passed a scan (a declared model must be listed) |
+| `admission.autoApprove.enabled` | `false` | scan verdicts populate the approved list automatically (PASS approves, FAIL/BLOCKED revokes); mounts the SA token + adds a Role scoped to the one approvals ConfigMap |
 | `admission.failurePolicy` | `Fail` | `Ignore` to fail-open at the API-server level |
 
 See [`values.yaml`](values.yaml) for the fully-documented set; `values.schema.json`
@@ -99,6 +111,16 @@ helm upgrade purser oci://ghcr.io/purser-io/charts/purser --version 0.2.1 \
   --set 'admission.approvedDigests={<sha256-of-a-passed-model>}'
 kubectl label ns my-app purser.io/admission=enforce
 ```
+
+**Closing the loop (`admission.autoApprove.enabled=true`).** Instead of
+operator-managing `admission.approvedDigests`, let verdicts maintain the list:
+a `PASS` at any scan endpoint patches each scanned file's SHA-256 into the
+approvals ConfigMap through the Kubernetes API, and a later `FAIL`/`BLOCKED`
+**revokes** it. The chart then mounts the ServiceAccount token on the core/HF
+pods and adds a namespaced Role limited to that one ConfigMap. This makes the
+scanner an *approval authority* — leave it off where a human review step is
+the point (see `SECURITY.md`, trust boundary 6), and tune which verdicts
+approve with `admission.autoApprove.verdicts`.
 
 ## Upgrade / uninstall
 

@@ -1,0 +1,33 @@
+{{- if and .Values.admission.enabled .Values.admission.autoApprove.enabled -}}
+# Lets the core API auto-populate the approved-digests ConfigMap from scan
+# verdicts (the scan→approve→admit loop). Deliberately the narrowest possible
+# grant: a namespaced Role on this chart's ONE ConfigMap by name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "purser.fullname" . }}-approvals-writer
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ include "purser.fullname" . }}-admission-approved]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "purser.fullname" . }}-approvals-writer
+  labels:
+    {{- include "purser.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "purser.fullname" . }}-approvals-writer
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "purser.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

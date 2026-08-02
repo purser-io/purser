@@ -10,11 +10,13 @@ from rich.console import Console
 from rich.table import Table
 
 from purser import __version__
+from purser.core import approvals
 from purser.core.findings import ScanReport, Severity
 from purser.core.hf import HFNotAvailable, download_repo, parse_hf_uri
 from purser.core.policy import Policy, PolicyError
 from purser.core.provenance import origin_db
 from purser.core.scanner import EXIT_CODES, scan_target
+from purser.signals import SignalContext
 from purser.core.signing import (
     SigningError,
     generate_keypair,
@@ -23,7 +25,8 @@ from purser.core.signing import (
     write_signature,
 )
 
-app = typer.Typer(help="Purser — ML model security scanner with policy controls.",
+app = typer.Typer(help="Purser — model supply-chain control plane: scan, verify "
+                       "provenance, and enforce policy over ML model artifacts.",
                   no_args_is_help=True)
 console = Console(stderr=False)
 
@@ -175,11 +178,26 @@ def scan(
             console.print(f"[bold red]Download failed:[/] {exc}")
             raise typer.Exit(3)
 
+    signal_ctx = None
+    if hf_repo is not None:
+        signal_ctx = SignalContext(repo_id=hf_repo, revision=revision,
+                                   source="huggingface")
     report = scan_target(local_target, policy=pol, origin=origin,
-                         publisher=publisher, repo_id=repo_id)
+                         publisher=publisher, repo_id=repo_id,
+                         signal_context=signal_ctx)
+    approvals.maybe_record(report)
+    if summary := report.metadata.get("approvals"):
+        if "error" in summary:
+            console.print(f"[yellow]Approvals: {summary['error']}[/]")
+        else:
+            console.print(f"Approvals: {summary['action']} "
+                          f"{len(summary['digests'])} digest(s) → {summary['store']}")
     if hf_repo is not None:
         report.target = target
     _emit(report, fmt, output)
+    from purser.core.intel import staleness_hint
+    if fmt == "table" and (hint := staleness_hint()):
+        console.print(f"[dim]{hint}[/]")
     raise typer.Exit(EXIT_CODES[report.verdict])
 
 
@@ -278,6 +296,43 @@ def verify(
         console.print(f"  identity: {ident.identity}")
 
     raise typer.Exit(0 if (result.verified or ident.verified) else 1)
+
+
+@app.command("update-intel")
+def update_intel(
+    url: str = typer.Option(None, "--url", help="Dataset URL (default: the project repo; PURSER_INTEL_URL overrides)"),
+    check: bool = typer.Option(False, "--check", help="Show the active dataset's source/age without fetching"),
+):
+    """Refresh the loader-CVE intel dataset without upgrading Purser.
+
+    Fetches the latest model-scoped dataset over HTTPS, validates it, and
+    installs it to ~/.purser/ where scans prefer it over the vendored copy.
+    Scans themselves never fetch — this command is the only network path.
+    Air-gapped: set PURSER_INTEL_URL to an internal mirror, or drop a file
+    via PURSER_LOADER_CVES."""
+    from purser.core import intel
+
+    if check:
+        source, text = intel.active_dataset()
+        stamp = intel.refreshed_on(text)
+        entries = len(intel.validate_dataset(text))
+        console.print(f"Active dataset: [bold]{source}[/] · {entries} entries "
+                      f"· refreshed {stamp or 'unknown'}")
+        if hint := intel.staleness_hint():
+            console.print(f"[yellow]{hint}[/]")
+        return
+    try:
+        summary = intel.update(url=url)
+    except ValueError as exc:
+        console.print(f"[bold red]Rejected fetched dataset:[/] {exc} — "
+                      "the previous dataset remains in place.")
+        raise typer.Exit(3)
+    except Exception as exc:
+        console.print(f"[bold red]Update failed:[/] {exc}")
+        raise typer.Exit(3)
+    console.print(f"[green]Updated[/] {summary['path']} — "
+                  f"{summary['entries']} entries, refreshed {summary['refreshed']} "
+                  f"(from {summary['url']})")
 
 
 @app.command()

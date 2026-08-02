@@ -27,7 +27,8 @@ and formal trademark registration may be deferred in favor of that path.
 ## What you may do (no permission needed)
 - Use the code under Apache-2.0.
 - Use the name **nominatively** — to truthfully refer to this project (e.g.
-  "compatible with Purser", "scanned with Purser", blog posts, comparisons).
+  "compatible with Purser", "cleared by Purser", "gated with Purser",
+  "scanned with Purser", blog posts, comparisons).
 - Keep the name/notices intact when redistributing unmodified builds.
 
 ## What needs permission / is not allowed
@@ -42,8 +43,10 @@ and formal trademark registration may be deferred in favor of that path.
 ## Third-party marks
 Product names referenced in our docs (e.g. **ModelScan**, **picklescan**,
 **Fickling**, **ModelAudit**, **Protect AI Guardian**, **HiddenLayer**,
-**Kubernetes**, **GitLab**, **Hugging Face**) are trademarks of their respective
-owners and are used for identification and comparison only — no affiliation or
+**JFrog**, **ClamAV**, **VirusTotal**, **Sigstore**, **Cosign**,
+**Kubernetes**, **GitLab**, **Hugging Face**) are trademarks of their
+respective owners and are used for identification, comparison, and
+interoperability (e.g. as ingested signal sources) only — no affiliation or
 endorsement is implied.
 
 ## Questions

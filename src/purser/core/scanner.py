@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from purser.core import audit, metrics
+from purser.core import atlas, audit, metrics
 from purser.core.deep import DEEP_FORMATS, deep_enabled, run_deep
 from purser.core.dispatch import scan_file
 from purser.core.findings import FileResult, Finding, ScanReport, Severity, Verdict
@@ -17,6 +17,7 @@ from purser.core.provenance import resolve as resolve_provenance
 from purser.core.sigstore_verify import IdentityResult
 from purser.core.sigstore_verify import verify as verify_sigstore
 from purser.core.signing import VerificationResult, verify_target
+from purser.signals import SignalContext, collect_signals
 
 
 def _signature_findings(result: VerificationResult) -> list[Finding]:
@@ -120,8 +121,15 @@ def scan_target(
     origin: str | None = None,
     publisher: str | None = None,
     repo_id: str | None = None,
+    signal_context: "SignalContext | None" = None,
 ) -> ScanReport:
-    """Scan a file or directory and evaluate the policy over the results."""
+    """Scan a file or directory and evaluate the policy over the results.
+
+    `signal_context` (where the artifact came from — hub, repo id, revision)
+    lets network-using signal sources (`purser.signals`) fetch upstream
+    intelligence; without it only offline sources (e.g. loader-CVE mapping)
+    apply, and the scan makes no network calls.
+    """
     target = Path(target)
     policy = policy or Policy.default()
     started = time.monotonic()
@@ -215,7 +223,17 @@ def scan_target(
                     report.deep_findings.append(f)
         report.metadata["deep_analysis"] = True
 
+    # External signal sources (upstream verdicts, loader-CVE intel, plugins).
+    # Signals run on every scan; each source decides its own applicability —
+    # network-using sources gate themselves to hub-fetched scans (a context
+    # with source="huggingface"), offline sources apply everywhere.
+    ctx = signal_context or SignalContext()
+    if ctx.target is None:
+        ctx.target = target
+    report.signal_findings = collect_signals(ctx)
+
     report = policy.evaluate(report)
+    atlas.tag_report(report)  # ATLAS enrichment (additive tags; PURSER_ATLAS=0 off)
     report.duration_seconds = time.monotonic() - started
 
     # Observability: metrics (always, cheap) + structured audit (if enabled).

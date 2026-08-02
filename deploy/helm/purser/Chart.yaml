@@ -1,6 +1,6 @@
 apiVersion: v2
 name: purser
-description: Purser — ML model security scanner with policy-based supply-chain controls
+description: Purser — model supply-chain control plane; policy, provenance, and enforcement for ML model artifacts
 type: application
 # Chart version — bump on any chart change (SemVer).
 version: 0.2.1
@@ -14,8 +14,11 @@ keywords:
   - security
   - ai
   - ml
-  - model-scanning
   - supply-chain
+  - policy
+  - provenance
+  - admission-control
+  - model-scanning
 maintainers:
   - name: Purser maintainers
 annotations:

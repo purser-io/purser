@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import os
+
 import subprocess
 import tempfile
 from pathlib import Path
@@ -185,4 +187,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Measure the static core only: keep external signal sources out
+    # of the published numbers (see benchmarks/README.md).
+    os.environ.setdefault("PURSER_SIGNALS", "0")
     main()
