@@ -10,9 +10,9 @@ hf auth login                          # or set HF_TOKEN
 # create the Space (once) — pick the org/name you want public
 hf repo create purser-io/purser --repo-type space --space_sdk gradio
 
-# push these three files to it
+# push the app files to it (exclude local build junk)
 cd demo/hf-space
-hf upload purser-io/purser . . --repo-type space
+hf upload purser-io/purser . . --repo-type space --exclude "__pycache__/*" --exclude "DEPLOY.md"
 ```
 
 The Space builds from `requirements.txt` (Purser comes from PyPI — no source

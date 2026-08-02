@@ -40,6 +40,17 @@ rotate on `helm upgrade`).
 | — | NetworkPolicy (`networkPolicy.enabled`) |
 | — | Admission webhook (`admission.enabled`) — deploy-time verdict + digest enforcement |
 
+**Signal sources.** With `hf.enabled`, `hf://` scans also fetch the Hub's own
+scan verdicts as a corroborating signal (outbound calls beyond the download
+itself). Control via env on the worker, e.g.:
+
+```yaml
+config:
+  extraEnv:
+    - { name: PURSER_SIGNALS, value: "0" }            # fully offline
+    - { name: PURSER_CARD_ATTESTATIONS, value: "1" }  # opt-in attestation gate
+```
+
 With `metrics.serviceMonitor.enabled` + `metrics.prometheusRule.enabled` against a
 Prometheus/Grafana stack, importing [`deploy/grafana/purser-overview.json`](../../grafana/purser-overview.json)
 gives a security overview:

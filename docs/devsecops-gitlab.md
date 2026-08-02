@@ -160,6 +160,18 @@ scan-remote-model:
 Keep the download-capable image on trusted runners only — it reaches out to the
 internet, which the core scanning image does not.
 
+Two things to know about `hf://` scans:
+
+- Besides downloading the model, the job also looks up **Hugging Face's own
+  scan verdicts** for the repo and folds any upstream `unsafe`/`caution` flag
+  into the report (`HF_UPSTREAM_*` findings). `HF_TOKEN` authenticates these
+  lookups too. An upstream *safe* never overrides Purser's own findings.
+- On an egress-filtered or proxied runner that lookup may fail — you'll see a
+  LOW `SIGNAL_UNAVAILABLE` finding (advisory; the job still passes). To skip
+  the lookups entirely, set `PURSER_SIGNALS: "0"` in the job's `variables:`
+  (per-source: `PURSER_SIGNAL_HF_VERDICTS: "0"`; timeout:
+  `PURSER_SIGNAL_TIMEOUT_SECONDS`, default 10).
+
 ---
 
 ## Step 6 — Run it as a shared service (optional)
@@ -187,6 +199,20 @@ If you expose the service, set an API key so only your pipelines can use it:
 weights, advanced pickle tricks). Turn it on with `PURSER_ENABLE_DEEP=1` and
 `PURSER_DEEP_URL=http://purser-deep:8090`. It's off by default; see the
 README's [Deep analysis](../README.md#deep-analysis-optional-companion) section.
+
+**Want governance checks?** An opt-in gate can require models to *document
+themselves*: set `PURSER_CARD_ATTESTATIONS: "1"` and `hf://` scans flag a
+missing model card (`CARD_MISSING`) or missing declared eval results
+(`CARD_NO_EVAL_RESULTS`) as LOW findings. Pair with a policy rule
+(`- id: CARD_MISSING, action: deny`) to hard-block undocumented models — see
+[Configuring a Policy §8](configuring-policy.md) and the README's
+[Signal sources](../README.md#signal-sources-upstream-intelligence) section.
+
+**Same verdict at deploy time.** The scan gate in CI has a Kubernetes twin: an
+admission webhook (`admission.enabled=true` in the Helm chart) that rejects
+pods referencing unapproved model digests or unpinned images — so a model that
+skipped your pipeline still can't reach the cluster. See the README's
+[Kubernetes](../README.md#kubernetes) section.
 
 ---
 
@@ -219,6 +245,10 @@ actually verify, not just trust.
   `hf://` scan. Use the `-hf` image (Step 5) for remote downloads.
 - **A large file reports "truncated":** raise `PURSER_MAX_SCAN_MB` (e.g.
   `variables: PURSER_MAX_SCAN_MB: "8192"`).
+- **A finding says a signal source was unavailable (`SIGNAL_UNAVAILABLE`):**
+  the runner couldn't reach Hugging Face's scan-verdict API. It's LOW/advisory
+  and won't fail the job; set `PURSER_SIGNALS: "0"` on air-gapped runners to
+  skip the lookup entirely.
 - **Want machine-readable results elsewhere:** the job saves a SARIF file; you
   can also use `--format json` for a plain report.
 

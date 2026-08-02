@@ -1,8 +1,8 @@
 # CNCF Landscape entry — prepared (submission deferred)
 
 Purser fits the CNCF Landscape under **Provisioning → Security & Compliance**
-(ML supply-chain / model scanning). This file holds the ready-to-submit entry so
-it can go in the moment the inclusion bar is met.
+(ML model supply-chain policy/enforcement). This file holds the ready-to-submit
+entry so it can go in the moment the inclusion bar is met.
 
 ## Status: prepared, not yet submitted
 
@@ -32,10 +32,12 @@ Under the `Provisioning` category, `Security & Compliance` subcategory:
     repo_url: https://github.com/purser-io/purser
     logo: purser.svg
     description: >-
-      Static security scanner for ML model artifacts: malicious-code and
-      data-exfiltration detection across 35+ formats, with a policy engine
-      (country of origin, publisher, format), signed/verified provenance, and
-      CI + Kubernetes admission enforcement.
+      Model supply-chain control plane for ML artifacts: aggregates signals —
+      a never-execute static scanner (~35 formats), upstream scanner verdicts,
+      signed/verified provenance (Ed25519/Sigstore), and pluggable
+      third-party sources — under a policy engine (country of origin,
+      publisher, format, signer identity) whose verdict is enforced in CI,
+      via REST API, and at Kubernetes admission.
     license: Apache-2.0
     # crunchbase: https://www.crunchbase.com/organization/<org>   # required — add org first
     # twitter / project_org as applicable

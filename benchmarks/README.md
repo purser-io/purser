@@ -1,8 +1,13 @@
 # Purser validation benchmark
 
 Measures Purser's detection efficacy and — the number that actually matters —
-its **false-positive rate on real models**, plus scan latency. Addresses roadmap
-item #1 (*real-world validation + published benchmark*).
+its **false-positive rate on real models**, plus scan latency. Addresses the
+(now-complete) *real-world validation + published benchmark* roadmap arc.
+
+Scope note: the corpus is scanned as **local directories**, so these numbers
+measure the static core's detection/FPR. Signal sources (upstream Hub
+verdicts, the attestation gate) are not exercised here — they only run on
+`hf://`-path scans.
 
 **Phase 1** (this): a known-answer test (KAT) corpus of **inert** malicious
 samples across the claimed attack classes, a **synthetic-benign** set, and an
@@ -90,13 +95,15 @@ Adversarial evasion resistance (`evasion.py`):
 
 | Set | Result |
 |---|---|
-| Evasion recall on techniques Purser claims to resist | **100%** (15/15) — gated |
-| Known-open residuals (ROADMAP) exercised | 2 evaded (packed-binary endpoint, protocol-0 ASCII pickle under a structured ext) |
+| Evasion recall on techniques Purser claims to resist | **100%** (17/17) — gated |
+| Known-open residuals (ROADMAP) exercised | 1 evaded (packed-binary endpoint) |
 
 The resisted set spans spoofed extensions, doc-name disguise, nested archives,
 `.npz`-embedded pickles, `STACK_GLOBAL`/`posix` pickles, base32/hex/zlib/base85/UTF-16
-and single-byte-XOR exfil, and encoded/obfuscated `trust_remote_code` source. The
-two known-open residuals are reported (not gated) so the frontier stays measured.
+and single-byte-XOR exfil, encoded/obfuscated `trust_remote_code` source,
+aliased/dynamically-resolved dangerous callables (taint pass), and a
+protocol-0 ASCII pickle under a structured extension. The one known-open
+residual is reported (not gated) so the frontier stays measured.
 
 ## Corpus
 

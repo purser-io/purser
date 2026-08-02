@@ -184,6 +184,27 @@ rules:
 - `warn` — downgrade it so it won't fail the scan.
 - `ignore` — hide it entirely (use sparingly).
 
+**Signal findings tune the same way.** Findings from
+[signal sources](../README.md#signal-sources-upstream-intelligence) — external
+intelligence gathered on `hf://` scans — go through the same `rules:` overrides:
+
+| Finding ID | Comes from | Default |
+|---|---|---|
+| `HF_UPSTREAM_UNSAFE` | HuggingFace's own scanners flagged a file | HIGH (fails) |
+| `HF_UPSTREAM_SUSPICIOUS` | upstream "caution"-level flag | MEDIUM |
+| `CARD_MISSING` | model has no model card *(needs `PURSER_CARD_ATTESTATIONS=1`)* | LOW |
+| `CARD_NO_EVAL_RESULTS` | card declares no eval results *(same opt-in)* | LOW |
+| `SIGNAL_UNAVAILABLE` | a signal couldn't be fetched (coverage gap) | LOW |
+
+For example, to **require documented models** — block anything without a model
+card (with the attestation gate enabled and scanning via `hf://`):
+
+```yaml
+rules:
+  - id: CARD_MISSING
+    action: deny
+```
+
 ---
 
 ## What the scan decides
@@ -196,7 +217,7 @@ Your policy produces one **verdict**, which also sets the command's exit code
 | PASS | No concerns. | 0 |
 | WARN | Minor findings only. | 0 |
 | FAIL | A finding at/above your `fail_on` severity. | 1 |
-| BLOCKED | A rule (format / origin / publisher / name / signing / identity) rejected it. | 2 |
+| BLOCKED | A rule rejected it — format / origin / publisher / name / signing / identity, or a `rules:` entry with `action: deny`. | 2 |
 | ERROR | Couldn't scan (bad path, etc.). | 3 |
 
 ---

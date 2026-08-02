@@ -1,5 +1,5 @@
-"""Adversarial evasion suite for the Purser validation benchmark (roadmap #1,
-Phase 3).
+"""Adversarial evasion suite for the Purser validation benchmark (Phase 3 of
+the now-complete validation arc).
 
 Where the known-answer corpus (`kat.py`) asks "does Purser flag a plainly
 malicious sample?", this asks the harder question: "does it still flag the

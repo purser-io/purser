@@ -1,8 +1,9 @@
-name: "Purser — ML model scan"
+name: "Purser — ML model supply-chain gate"
 description: >-
-  Statically scan ML model artifacts for malicious code and data-exfiltration and
-  gate CI on policy. Exit-code driven: 0 pass/warn · 1 findings · 2 policy-blocked
-  · 3 error — a bad model fails the job.
+  Render and enforce one policy verdict over ML model artifacts — static
+  never-execute scanning, provenance/signature checks, and (on hf:// targets)
+  upstream scan-verdict signals. Exit-code driven: 0 pass/warn · 1 findings ·
+  2 policy-blocked · 3 error — a bad model fails the job.
 author: "The Purser Authors"
 branding:
   icon: "shield"

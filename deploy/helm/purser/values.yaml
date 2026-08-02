@@ -140,6 +140,10 @@ podDisruptionBudget:
 
 # Restrict traffic. When enabled: ingress only to the API port (from
 # `networkPolicy.allowFrom`), egress limited to DNS (+ extras you add).
+# Note: the selector also matches the HF worker pod — with hf.enabled, add
+# Hub egress via extraEgress or hf:// downloads AND the upstream-verdict
+# signal lookups will fail (the latter degrade to a SIGNAL_UNAVAILABLE
+# finding, not a hard error).
 networkPolicy:
   enabled: false
   allowFrom: []               # e.g. [{ namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
@@ -248,7 +252,7 @@ hf:
     tag: ""
   replicaCount: 1
   hfAllowlist: ""             # comma-separated org/ prefixes; empty = any
-  hfTokenSecret: ""          # Secret name containing key HF_TOKEN (private repos)
+  hfTokenSecret: ""          # Secret name containing key HF_TOKEN (private repos; also authenticates upstream scan-verdict lookups)
   resources:
     requests: { cpu: 250m, memory: 512Mi }
     limits: { cpu: "2", memory: 4Gi }

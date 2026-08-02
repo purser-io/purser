@@ -1,8 +1,9 @@
 # Contributing to Purser
 
-Thanks for helping make ML model distribution safer. Purser is an Apache-2.0
-open-source project and we welcome issues and pull requests. By participating you
-agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+Thanks for helping build the open-source model supply-chain control plane.
+Purser is an Apache-2.0 open-source project and we welcome issues and pull
+requests. By participating you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting security issues
 
@@ -37,6 +38,12 @@ make licenses    # THIRD_PARTY_LICENSES.md
    **positive** case and an **adversarial/benign** case; adversarial fixtures must
    use **inert** payloads — Purser never executes a model, and neither does its
    test suite.
+   **Adding a signal source?** Register it via the `purser.signals` entry-point
+   group (see `src/purser/signals/__init__.py` for the `SignalSource` protocol
+   and `tests/test_signals.py` for the offline mocked-endpoint test pattern).
+   Sources must never raise (fail *visibly* as a `SIGNAL_UNAVAILABLE` finding,
+   not silently pass), must only ever **add** findings, and must parse fetched
+   content as data — never execute it.
 3. Run `ruff check` and `pytest` locally. CI enforces both across Python
    3.11–3.14, plus Helm lint, an image build + Trivy scan, and the DCO check.
 4. Add a note under [`CHANGELOG.md`](CHANGELOG.md) for any user-facing change.

@@ -4,7 +4,8 @@
 provenance + enforcement plane that ingests signals from many analyzers —
 Purser's own static scanner, the `purser-deep` companion, verified
 signatures/identity, and upstream/third-party intelligence — and renders a
-single verdict it enforces in CI and at Kubernetes admission. The scanner is
+single verdict it enforces in CI, over the REST API, and at Kubernetes
+admission. The scanner is
 one input; the control plane (policy, provenance, enforcement, signal
 aggregation) is the product. Detection depth still matters, but Purser
 *orchestrates* detection rather than competing on it alone.
@@ -18,7 +19,8 @@ container images and a signed Helm chart on GHCR, built and published by CI). Th
 security-hardening arc, supply-chain foundations (hash-pinned Wolfi builds, SBOM,
 cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 `trust_remote_code` engines, observability, disguise-resistant format detection,
-deploy-time admission enforcement, Sigstore verified-identity provenance, and a
+deploy-time admission enforcement, Sigstore verified-identity provenance,
+pluggable signal sources with upstream-verdict ingestion (`purser.signals`), and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
 (292 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
@@ -124,15 +126,15 @@ intelligence and (b) **provenance/attestation** depth and interop.
 
 | Item | Notes |
 |---|---|
-| **Upstream scan-verdict enrichment (HuggingFace)** — **SHIPPED** | Done, as the first **pluggable signal source** (`purser.signals`, source `hf-verdicts`): on the `-hf` path an upstream `unsafe`/`suspicious` verdict from the Hub's scan pipeline (picklescan, ClamAV, Protect AI, JFrog) surfaces as a corroborating `HF_UPSTREAM_UNSAFE`/`_SUSPICIOUS` finding; upstream `safe` never downgrades Purser's own verdict (FN history: nullifAI 7z, picklescan zero-days). Third-party feeds plug into the same interface via the `purser.signals` entry-point group. Remaining refinement: cache by commit sha. |
+| **Upstream scan-verdict enrichment — remaining refinement** | The ingestion itself **shipped** (see *Recently shipped*: `purser.signals`, source `hf-verdicts`). Left here: **cache verdict lookups by commit sha** (one call/repo/revision today, no cross-scan cache). |
 | **Loader-CVE mapping (OSV/GHSA, offline)** | No feed of malicious *models* exists, but framework/parser CVEs do: map a detected format + declared version to known load-time RCEs (`.keras`/`.h5` CVE-2025-9906/-9905 `safe_mode` bypass, Keras Lambda CVE-2024-3660, llama.cpp GGUF parser CVEs; CWE-502 class). Ingest bulk **OSV-JSON** (`ossf/osv-schema`, CC-BY-4.0) or the GHSA mirror **offline**; emit "load-unsafe under `<framework> <version>`". Also flags OSV `MAL-` malicious-*package* records against bundled deps. |
 | **MITRE ATLAS technique tagging** | Tag findings with `AML.T####` IDs from `mitre-atlas/atlas-data` (YAML / STIX 2.1, free, monthly). Enrichment/credibility only — not a signature source. Cheap to ingest; aligns reports with the framework reviewers expect. |
 | **Known-bad denylist + refresh** | A first-class `denylist` policy dimension (SHA-256 hashes + publisher/repo globs), refreshable offline like AV signatures, **populated from** the sources above (HF `unsafe`, huntr → CVE, operator curation). The policy engine already has publisher/name blocklists (a `models` example even names `known-cve-model`); this generalizes it and adds content hashes. A genuine **open** malicious-model hash/IOC feed is a market gap Purser could help seed. |
 | **Signed AIBOM (model bill-of-materials)** | Extend the CycloneDX SBOM (today: the *package*) to a signed **model AIBOM** — files, hashes, formats, detected code surfaces, provenance/identity, verdict — as a cosign attestation. The static-provenance answer to W&B lineage (checksum/tamper-only, no signing) and to HiddenLayer's "AIBOM" marketing — but open and signed. |
 | **Provenance interop (W&B / registry)** | Read a W&B **Artifact manifest + digest + lineage DAG** (open-source SDK, no execution) as a provenance signal, and ship a **W&B Automations → webhook** gate recipe: scan on new version/alias, block promotion to a **protected alias** (`Production`) on FAIL. Generalizes to any registry with a promotion webhook. |
-| **Model-card / eval-attestation gate** — **SHIPPED (v1)** | Done as the opt-in `card-attestations` signal source (see *Planned — `purser-eval` companion* below): require-a-card and require-declared-eval-results gate via findings + policy rule overrides. Remaining refinements tracked there: score floors / coverage expressions (needs a policy dimension), hash cross-checks, non-HF card formats (eval-results files, Seekr-style test cards). |
+| **Model-card / eval-attestation gate — remaining refinements** | The v1 gate **shipped** (see *Recently shipped* and *Planned — `purser-eval` companion*: opt-in `card-attestations` source). Left here: **score floors / coverage expressions** (needs a policy dimension), **hash cross-checks** of card-referenced files, non-HF card formats (eval-results files, Seekr-style test cards). |
 
-## Planned — `purser-eval` companion (scoped; no code yet)
+## Planned — `purser-eval` companion (slice 1 shipped; behavioral slices scoped)
 
 The control plane gains a **behavioral** signal source: a separate, opt-in
 companion (a sibling of `purser-deep`) that produces eval-derived findings
@@ -209,9 +211,13 @@ for per-release detail):
   subsystem where external intelligence plugs into the policy engine as a
   first-class signal (`signal_findings` on the report, policy rule overrides
   apply, entry-point group `purser.signals` for third-party sources). First
-  source: `hf-verdicts` — the Hub's own per-file scan verdicts (picklescan /
-  ClamAV / Protect AI / JFrog) corroborate `-hf`-path scans; upstream `safe`
-  never downgrades Purser's own verdict, and local scans stay fully offline.
+  two sources: `hf-verdicts` — the Hub's own per-file scan verdicts
+  (picklescan / ClamAV / Protect AI / JFrog / VirusTotal) corroborate
+  `-hf`-path scans — and the opt-in `card-attestations` gate
+  (`PURSER_CARD_ATTESTATIONS=1`; `CARD_MISSING` / `CARD_NO_EVAL_RESULTS`).
+  Upstream `safe` never downgrades Purser's own verdict, local scans stay
+  fully offline, and gates are env-controlled (`PURSER_SIGNALS`,
+  `PURSER_SIGNAL_<NAME>`, `PURSER_SIGNAL_TIMEOUT_SECONDS`).
 
 - **Public release & distribution (v0.1.0 → v0.2.1):** public git repo with
   protected `main`; GitHub Actions CI (lint + test matrix 3.11–3.14, lockfile /

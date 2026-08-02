@@ -1,9 +1,10 @@
 # Try Purser in 5 minutes
 
-Purser checks machine-learning model files for **hidden dangerous code** and
-**leaked secrets** *before* anyone loads them. It reads each file without ever
-running it, then gives a one-word result: **PASS**, **WARN**, **FAIL**, or
-**BLOCKED**.
+Purser decides whether a model is allowed into your environment: it gathers
+signals — a never-execute static scan, provenance, your team's rules — and
+gives one result that CI or Kubernetes can enforce: **PASS**, **WARN**,
+**FAIL**, or **BLOCKED**. It reads each file without ever running it. This
+demo shows both halves: a *scan finding* and a *policy block*.
 
 This folder has a few tiny sample files and a rule that **blocks models from a
 chosen country** (China, in this example), so you can see both kinds of check.

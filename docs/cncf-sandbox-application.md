@@ -13,8 +13,10 @@ Working draft for the [Sandbox application form](https://github.com/cncf/sandbox
 **Description:** The open-source model supply-chain control plane: a policy,
 provenance, and enforcement layer for ML model artifacts. Purser aggregates
 signals about a model — its own never-execute static scanner (~35 formats),
-upstream scanner verdicts (e.g. the HuggingFace Hub's scan pipeline),
-Ed25519/Sigstore verified provenance, and pluggable third-party sources — and
+upstream scanner verdicts (e.g. the HuggingFace Hub's scan pipeline), an
+opt-in model-card/eval-attestation gate,
+Ed25519/Sigstore verified provenance, and pluggable third-party sources (the
+`purser.signals` entry-point interface) — and
 renders a single policy verdict enforced in CI (exit codes / GitHub Action),
 via a REST API, and at deploy time through a Kubernetes
 `ValidatingAdmissionWebhook` that rejects pods referencing unapproved model
@@ -38,7 +40,8 @@ Sigstore verification offline), Kyverno/OPA Gatekeeper (image policy; Purser
 does model-artifact policy), OSS scanners (picklescan/ModelScan/ModelAudit —
 scanning only, no policy/enforcement plane; Purser can ingest rather than
 compete). No CNCF project owns "unified model gate: scan + intel +
-provenance + policy + admission."
+provenance + policy + admission." (The gate is static/attestation-based by
+design — it does not evaluate model behavior, and its docs say so plainly.)
 
 **Vendor neutrality / IP:** No company behind the project; the trademark,
 logo, and domain are unencumbered and the maintainer is willing to donate

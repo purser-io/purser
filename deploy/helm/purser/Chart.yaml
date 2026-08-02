@@ -14,8 +14,11 @@ keywords:
   - security
   - ai
   - ml
-  - model-scanning
   - supply-chain
+  - policy
+  - provenance
+  - admission-control
+  - model-scanning
 maintainers:
   - name: Purser maintainers
 annotations:

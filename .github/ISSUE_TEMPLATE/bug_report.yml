@@ -26,6 +26,8 @@ body:
         - Helm chart
         - Container image
         - Deep companion (purser-deep)
+        - Admission webhook
+        - Signal source (purser.signals)
         - Other
     validations:
       required: true

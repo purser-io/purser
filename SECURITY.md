@@ -6,7 +6,8 @@ This document is both Purser's **vulnerability-disclosure policy** and a
 independent third-party audit. Forward work is tracked in
 [`ROADMAP.md`](ROADMAP.md).
 
-_Last reviewed: 2026-07-19 · applies to Purser 0.1.x._
+_Last reviewed: 2026-08-02 · applies to Purser 0.2.x (incl. the signals
+subsystem and the admission webhook)._
 
 ---
 
@@ -31,8 +32,8 @@ never live malware.
 
 | Version | Supported |
 |---|---|
-| 0.1.x | ✅ (current) |
-| < 0.1 | ❌ |
+| 0.2.x | ✅ (current) |
+| < 0.2 | ❌ |
 
 Pre-1.0: only the latest minor line receives security fixes.
 
@@ -40,13 +41,15 @@ Pre-1.0: only the latest minor line receives security fixes.
 
 ## Threat model
 
-Purser's job is to inspect **untrusted, potentially hostile model files** and
-enforce policy — so the files it reads are the adversary, and (for the service)
-so are its network clients.
+Purser's job is to inspect **untrusted, potentially hostile model files** —
+and, on hub scans, **untrusted external signals about them** — and render one
+policy verdict it enforces. So the files it reads are the adversary, (for the
+service) so are its network clients, and (for signal ingestion) so is anything
+a remote endpoint returns.
 
 **Assets:** the host/cluster running the scanner; secrets reachable from it
-(`HF_TOKEN`, mounted model stores); the integrity of the scan verdict used as a
-gate.
+(`HF_TOKEN`, mounted model stores); the integrity of the **policy verdict**
+used as a gate — in CI, over the API, and at Kubernetes admission.
 
 **Trust boundaries:**
 1. *Model file → scanner.* Files are **parsed, never executed** (see below).
@@ -58,6 +61,20 @@ gate.
    trustworthy as the keys an operator places in the trust store; for the
    Sigstore path, it derives from a verified external root (Fulcio/Rekor) via
    the transparency log.
+4. *Signal source → verdict.* On the `-hf` path, `purser.signals` sources fetch
+   JSON from the Hub (`HF_ENDPOINT`-overridable) and their findings count
+   toward the verdict. Responses are **parsed as data, never executed**, and a
+   source can only **add** findings — the plugin context deliberately excludes
+   the in-progress report, so no signal can suppress or downgrade another
+   finding (`signals/__init__.py`). A compromised or spoofed upstream can
+   therefore cause false *positives* (over-blocking), not false negatives.
+   Third-party plugins are **operator-installed code**: audit before
+   installing; disable with `PURSER_SIGNALS=0` / `PURSER_SIGNAL_<NAME>=0`.
+5. *Admission webhook → API server.* The `ValidatingAdmissionWebhook` is
+   **fail-closed by default** (`admission.failurePolicy: Fail`) and opt-in per
+   namespace; its TLS cert/CA bundle are chart-managed. Fail-closed trades
+   availability for integrity: an outage blocks opted-in deploys rather than
+   waving them through.
 
 **Primary guarantee — models are never executed or extracted:**
 - Pickle streams are parsed statically with `pickletools.genops`
@@ -88,7 +105,7 @@ the built-in caps. See *Residual risk*.
 | Temp files | **Good.** Attacker bytes staged to `mkdtemp`/`NamedTemporaryFile` and removed in `finally`; never executed. | `core/dispatch.py`, `api.py` |
 | AuthN | **Good (opt-in).** API-key via `Authorization: Bearer`/`X-API-Key`, **constant-time** compare (`hmac.compare_digest`); open only when unset (documented). | `api.py` `require_auth` |
 | Rate limiting / DoS | **Adequate.** Per-client token bucket (429 + `Retry-After`) + global concurrency cap + per-file windowing/finding cap. Per-replica, not cluster-global. | `api.py`, `scanners/exfil.py` |
-| SSRF | **Contained.** The only outbound fetch is `snapshot_download(repo_id=…)` to the **HF Hub** (not arbitrary hosts); the endpoint is **off by default**, allowlist-scoped, and auth-gated. | `core/hf.py`, `api.py` `scan_hf` |
+| SSRF | **Contained.** Two outbound paths, both hub-only and `-hf`-path-only: `snapshot_download(repo_id=…)` for artifacts (endpoint **off by default**, allowlist-scoped, auth-gated), and the signal sources' verdict/card lookups (`GET/POST` to the same hub, repo-id-scoped URLs, `PURSER_SIGNAL_TIMEOUT_SECONDS` timeout, responses parsed as JSON and never executed; kill switches `PURSER_SIGNALS=0`, `PURSER_SIGNAL_<NAME>=0`). Neither reaches arbitrary hosts; local scans make no network calls (regression-tested). | `core/hf.py`, `api.py` `scan_hf`, `signals/hf_verdicts.py`, `signals/card_attestations.py` |
 | Secret handling | **Good.** `HF_TOKEN` from env only; upload/HF responses strip absolute paths before returning; findings avoid echoing full secret values. | `api.py`, `scanners/exfil.py` |
 | Signature integrity | **Good.** Ed25519 over a full-file SHA-256 manifest; exact-match + added-file detection; **symlinks excluded** from the manifest; revocation + validity windows. | `core/signing.py:100` |
 | Error handling | **Good.** Per-scanner exceptions are contained as `SCANNER_ERROR` findings — one malformed file can't crash a directory scan. | `core/dispatch.py` |
@@ -127,6 +144,19 @@ calls only when `PURSER_ENABLE_DEEP=1`:
 - It ships the same trusted `requirements-deep.lock` and is actually *smaller*
   than core (no signing deps).
 
+**Admission webhook** (`src/purser/admission.py`, Helm `admission.enabled`) —
+the deploy-time enforcement point:
+- **Fail-closed by default** (`admission.failurePolicy: Fail`): if the webhook
+  is unreachable, opted-in namespaces cannot create pods — an availability
+  trade made deliberately, since `Ignore` would let a webhook outage become a
+  policy bypass. Opt-in is per namespace/pod via label selectors, so the blast
+  radius is scoped.
+- Enforces **image-digest pinning** and an **approved-model-digest** allowlist
+  (operator-managed ConfigMap/GitOps); rejection reasons are returned in the
+  admission response, sanitized against log injection.
+- Serving cert + `caBundle` are chart-generated and kept stable across
+  upgrades; rotate by deleting the cert Secret and upgrading.
+
 **Kubernetes** (`deploy/k8s/deployment.yaml`) sets a hardened `securityContext`:
 `runAsNonRoot`, `runAsUser: 10001`, `allowPrivilegeEscalation: false`,
 `readOnlyRootFilesystem: true`, `capabilities.drop: ["ALL"]`,
@@ -145,6 +175,14 @@ Secret.
 - [ ] Keep the deep companion **off** (`PURSER_ENABLE_DEEP=0`) unless needed;
   when on, set the same `PURSER_API_KEY` on it and keep it on the internal
   network (the core reaches it via `PURSER_DEEP_URL`).
+- [ ] On air-gapped or egress-filtered runners, set `PURSER_SIGNALS=0` (or
+  `PURSER_SIGNAL_<NAME>=0` per source) to skip upstream-verdict lookups;
+  treat upstream verdicts as advisory input, never authority. Audit any
+  third-party `purser.signals` plugin before installing it — plugins are
+  operator-installed code.
+- [ ] If you enable the admission webhook, keep `failurePolicy: Fail` and
+  scope the namespace selector deliberately — `Ignore` converts webhook
+  downtime into a silent policy bypass.
 - [ ] Use a `require_signed` policy (`policies/signed-only.yaml`) and a curated
   trust store for provenance enforcement.
 - [ ] Refresh the pinned Wolfi digest on a cadence (`make base-digest`) and gate
@@ -173,8 +211,8 @@ Secret.
 
 ## Residual risk (honest limits)
 
-A **clean scan is necessary, not sufficient.** Purser does **not** defend
-against:
+A **clean verdict is necessary, not sufficient** — and it is only as strong as
+the signals that produced it. Purser does **not** defend against:
 
 1. **Novel pickle gadget chains** through allowlisted libraries — mitigate by
    banning pickle via an allowlist policy (`signed-only.yaml`).
@@ -192,11 +230,17 @@ against:
    fail-safe choice for a gate); proving a dangerous op is *reachable* at
    runtime needs the framework's graph semantics at model-load, which a no-load
    scanner does not do.
+6. **Weak or missing signals** — an upstream verdict can be stale, queued, or
+   unavailable (surfaced as `SIGNAL_UNAVAILABLE`, never a silent pass), and a
+   model-card attestation is a *claim*, not evidence. Signals only ever add
+   findings; none of them certifies safety, and their absence should be read
+   as reduced coverage, not as "clean."
 
 Deploy Purser as **one layer of defense-in-depth**, not a sole trust boundary.
 
 ## Assurance
 
-- 200+ automated tests (unit + API + adversarial/evasion fixtures with inert payloads).
+- 292 automated tests (unit + API + adversarial/evasion fixtures with inert
+  payloads, incl. offline mocked-endpoint tests for every signal source).
 - `ruff` lint clean; reproducible hash-pinned builds; deterministic CycloneDX
   SBOM; `trivy` (image) and `osv-scanner` (deps) gates in CI.
