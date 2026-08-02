@@ -6,6 +6,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Per-release
 GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
+
+_Nothing yet._
+
+## [0.3.0] - 2026-08-02
 ### Changed
 - **Repositioned as a model supply-chain control plane.** README, roadmap,
   package/CLI/API descriptions now lead with what differentiates Purser —
@@ -202,6 +206,7 @@ GitHub notes are generated automatically; this file is the curated summary.
   CLI; Prometheus metrics and an audit log; optional deep-analysis companion;
   digest-pinned Wolfi container images, kustomize manifests, and a Helm chart.
 
+[0.3.0]: https://github.com/purser-io/purser/releases/tag/v0.3.0
 [0.2.1]: https://github.com/purser-io/purser/releases/tag/v0.2.1
 [0.2.0]: https://github.com/purser-io/purser/releases/tag/v0.2.0
 [0.1.3]: https://github.com/purser-io/purser/releases/tag/v0.1.3

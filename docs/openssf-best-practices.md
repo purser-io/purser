@@ -31,7 +31,7 @@ passing requirement's floor, noted for transparency).
 | Public version-controlled source | Met | public git repo |
 | Tracks changes + interim versions (distributed VCS) | Met | git |
 | Unique version numbering | Met | SemVer in `pyproject.toml` / `Chart.yaml` |
-| Semantic versioning | Met | `0.2.x`; tags `v0.1.0`…`v0.2.1` |
+| Semantic versioning | Met | `0.3.x`; tags `v0.1.0`…`v0.3.0` |
 | Release notes for each release | Met | `CHANGELOG.md` (Keep-a-Changelog) + GitHub Releases |
 
 ## Reporting
@@ -130,7 +130,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 | repo_distributed | SUGGESTED | Met | git (distributed VCS). |
 | version_unique | MUST | Met | Unique SemVer in `pyproject.toml` / `Chart.yaml`. |
 | version_semver | SUGGESTED | Met | Semantic Versioning. |
-| version_tags | SUGGESTED | Met | Release tags `v0.1.0`…`v0.2.1`. |
+| version_tags | SUGGESTED | Met | Release tags `v0.1.0`…`v0.3.0`. |
 | release_notes | MUST | Met | `CHANGELOG.md` (Keep-a-Changelog) + GitHub Releases per tag. |
 | release_notes_vulns | MUST | Met | Security-relevant fixes are called out in `CHANGELOG.md` (e.g. exfil FP hardening, Wolfi base CVE); no unfixed known vulns at any release. |
 
