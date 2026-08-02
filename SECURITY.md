@@ -255,7 +255,7 @@ Deploy Purser as **one layer of defense-in-depth**, not a sole trust boundary.
 
 ## Assurance
 
-- 330 automated tests (unit + API + adversarial/evasion fixtures with inert
+- 353 automated tests (unit + API + adversarial/evasion fixtures with inert
   payloads, incl. offline mocked-endpoint tests for every signal source).
 - `ruff` lint clean; reproducible hash-pinned builds; deterministic CycloneDX
   SBOM; `trivy` (image) and `osv-scanner` (deps) gates in CI.

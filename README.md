@@ -11,7 +11,7 @@ enforcement for ML model artifacts — from CI to Kubernetes admission.**
 &nbsp;[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 &nbsp;![Version](https://img.shields.io/badge/version-0.2.1-informational.svg)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-3776AB.svg?logo=python&logoColor=white)
-&nbsp;![Tests](https://img.shields.io/badge/tests-330%20passing-brightgreen.svg)
+&nbsp;![Tests](https://img.shields.io/badge/tests-353%20passing-brightgreen.svg)
 &nbsp;![Lint](https://img.shields.io/badge/lint-ruff-000000.svg)
 &nbsp;![Status](https://img.shields.io/badge/status-pre--1.0-orange.svg)
 &nbsp;[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13900/badge)](https://www.bestpractices.dev/projects/13900)
@@ -38,9 +38,10 @@ policy engine today:
 - the optional **deep-analysis companion** (`purser-deep`) — pickle
   gadget-chain heuristics and weight tampering/steganography;
 - **upstream & third-party signals** — the HuggingFace Hub's own scan
-  verdicts, an opt-in model-card/eval-attestation gate, and any feed you
-  plug in via the `purser.signals` interface (an upstream *safe* never
-  downgrades Purser's own verdict — see
+  verdicts, refreshable **loader-CVE intel** (`purser update-intel`), an
+  opt-in model-card/eval-attestation gate, and any feed you plug in via the
+  `purser.signals` interface (an upstream *safe* never downgrades Purser's
+  own verdict — see
   [Signal sources](#signal-sources-upstream-intelligence)).
 
 The core never loads a model: nothing is deserialized or executed, all
@@ -182,7 +183,7 @@ re-verified **August 2026** — projects evolve; verify before relying on a cell
 | Deploy-time enforcement (CI action + K8s admission webhook) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | Ingests upstream/third-party scanner verdicts (plugin signals) | ✅ | ❌ | ❌ | ❌ | ❌ | ◐ |
 | Known-bad denylist (content hashes + publisher globs, offline refresh) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Loader-CVE intel (declared framework version → known load-time RCE) | ◐⁵ | ❌ | ❌ | ❌ | ◐ | ✅ |
+| Loader-CVE intel (declared framework version → known load-time RCE, refreshable) | ✅⁵ | ❌ | ❌ | ❌ | ◐ | ✅ |
 | Live threat feeds / behavioral backdoor / dashboards | ❌⁵ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ¹ Protect AI **Guardian** (built on ModelScan; Protect AI is now part of
@@ -203,12 +204,14 @@ exfiltration strings.
 binds keys to publisher + country (with revocation/validity), **and Sigstore
 (Fulcio/Rekor) bundles** for verified external-root identity (offline). Commercial
 tools track provenance/lineage (AIBOM) but not user-controlled signature verification.
-⁵ What ships in the box is a **vendored, curated loader-CVE dataset** (the ◐:
-it maps declared framework versions to known load-time RCEs, offline —
-ModelAudit ships CVE-aware checks too), and external feeds can plug in as
-[signal sources](#signal-sources-upstream-intelligence). The ❌ is honest for
-*live/subscription* threat feeds, behavioral detection, and dashboards —
-enterprise-platform territory.
+⁵ The loader-CVE dataset is **model-scoped and refreshable like AV
+signatures**: regenerated weekly from OSV.dev (human-reviewed PR), and end
+users pull updates without upgrading via `purser update-intel` (ModelAudit's
+◐: CVE-aware checks ship with its releases, no separate refresh channel).
+External feeds can also plug in as
+[signal sources](#signal-sources-upstream-intelligence). The ❌ below stays
+honest for *live/subscription push* feeds, behavioral detection, and
+dashboards — enterprise-platform territory.
 
 **Honest take:** Purser's edge is the combination of broad format coverage, the
 exfiltration engine, `trust_remote_code` AST analysis, and a **policy +
@@ -388,6 +391,7 @@ purser scan model.pkl --origin CN --format json -o report.json
 purser scan model.pkl --format sarif > report.sarif                     # CI integration
 purser policy-check policies/strict.yaml
 purser origins deepseek-ai
+purser update-intel                    # refresh loader-CVE intel (no upgrade needed)
 ```
 
 Exit codes: `0` pass/warn · `1` findings ≥ fail threshold · `2` blocked by

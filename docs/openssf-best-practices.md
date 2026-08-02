@@ -51,7 +51,7 @@ passing requirement's floor, noted for transparency).
 |---|---|---|
 | Working build (from source) | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles |
 | Common, FLOSS build tools | Met | `uv` / `pip`, `hatchling`, `helm`, `docker` |
-| Automated test suite | Met | 330 tests in `tests/` |
+| Automated test suite | Met | 353 tests in `tests/` |
 | Test-invocation documented | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test` |
 | Tests cover the majority of the code | Met | unit + API + adversarial/evasion fixtures across scanners/policy/signing |
 | Continuous integration | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix, lint, tests, helm, image build + Trivy) |
@@ -152,7 +152,7 @@ SHOULDs) gate the passing badge; SUGGESTED are bonus. Base URL below = the repo
 | build | MUST | Met | `pyproject.toml` (hatchling) + `uv`; `Makefile`; multi-stage Dockerfiles. |
 | build_common_tools | SUGGESTED | Met | `uv`/`pip`, hatchling, helm, docker. |
 | build_floss_tools | SHOULD | Met | All build tools are FLOSS. |
-| test | MUST | Met | 330 automated tests in `tests/`. |
+| test | MUST | Met | 353 automated tests in `tests/`. |
 | test_invocation | SHOULD | Met | `CONTRIBUTING.md` (`uv run pytest -q`); `make test`. |
 | test_most | SUGGESTED | Met | Unit + API + adversarial/evasion coverage across scanners/policy/signing. |
 | test_continuous_integration | SUGGESTED | Met | `.github/workflows/ci.yml` (3.11–3.14 matrix). |

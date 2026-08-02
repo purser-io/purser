@@ -22,7 +22,7 @@ cosign/SLSA, multi-arch), model signing with revocation, the exfil /
 deploy-time admission enforcement, Sigstore verified-identity provenance,
 pluggable signal sources with upstream-verdict ingestion (`purser.signals`), and a
 gated validation benchmark (incl. an adversarial evasion suite) are all shipped
-(330 tests). What remains is **not** bug-fixing — it is maturity, reach,
+(353 tests). What remains is **not** bug-fixing — it is maturity, reach,
 and depth. See *Recently shipped* at the bottom.
 
 Status legend: **planned** (agreed, not started) · **candidate** (worth doing,
