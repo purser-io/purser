@@ -42,6 +42,12 @@ So we're saying it out loud now: **Purser is the open-source model
 supply-chain control plane.** The clearance desk. Signals go in; one
 enforced verdict comes out.
 
+If you want it in two words: **Kyverno, for models.** Kyverno governs the
+Kubernetes resources an AI workload runs on — pods, images, GPUs — and never
+opens a model file; Purser renders and enforces the verdict about the
+artifact itself. The layers compose: run both, and (soon) let Kyverno verify
+Purser's signed model attestations with the engine you already operate.
+
 ## What "signals go in" means concretely
 
 As of this release, Purser's verdict aggregates:
