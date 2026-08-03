@@ -56,7 +56,14 @@ orchestrates detection rather than competing on it.
    `admission.autoApprove.enabled`). Opt-in (`PURSER_AUTO_APPROVE=1`),
    auditable (`metadata.approvals`). **Remaining:** verify **cosign
    attestations** instead of a digest allowlist — connecting the provenance
-   layer to the enforcement layer directly.
+   layer to the enforcement layer directly. This item doubles as the
+   **Kyverno interop wedge**: if Purser *emits* a signed attestation per
+   scanned model ("digest X: verdict PASS under policy Y"), shops
+   standardized on Kyverno/OPA can verify it with the policy engine they
+   already run — "Purser produces the model verdict; enforce it with our
+   webhook *or* your Kyverno." (Verified 2026-08: Kyverno's AI story is
+   cluster/GPU/image governance — it never opens a model artifact, so the
+   layers compose rather than compete.)
 
 3. **Prove aggregation with a second real intel signal.**
    - **Loader-CVE mapping — SHIPPED (incl. automated refresh)** as the

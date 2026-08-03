@@ -38,8 +38,13 @@ admission controllers (Kyverno/OPA for models). It closes the scan→deploy
 TOCTOU gap that CLI scanners leave open.
 
 **Comparable / adjacent projects:** in-toto, Sigstore (Purser consumes
-Sigstore verification offline), Kyverno/OPA Gatekeeper (image policy; Purser
-does model-artifact policy), OSS scanners (picklescan/ModelScan/ModelAudit —
+Sigstore verification offline), Kyverno/OPA Gatekeeper (image/infra policy;
+Purser does model-artifact policy — the two-word framing is "**Kyverno for
+models**": Kyverno governs the Kubernetes resources an AI workload runs on
+and never opens a model file, while Purser renders and enforces verdicts
+about the artifact itself; planned cosign model-attestations will let
+Kyverno shops verify Purser's verdicts with the engine they already run),
+OSS scanners (picklescan/ModelScan/ModelAudit —
 scanning only, no policy/enforcement plane; Purser can ingest rather than
 compete). No CNCF project owns "unified model gate: scan + intel +
 provenance + policy + admission." (The gate is static/attestation-based by
