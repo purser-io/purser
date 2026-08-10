@@ -6,6 +6,13 @@
 # HIGH/CRITICAL fixed-only gate as CI) on the new base, and opens a PR with the
 # result. If the run itself errors, it falls back to opening an issue so drift is
 # never silent. (Manual path: `make base-digest` still prints the live digest.)
+#
+# The digest is only half the pin: `apk add` resolves against the live Wolfi
+# package repo, so the toolchain (python, pip, build-base) is pinned by version
+# too and refreshed here as well — those versions can move without the digest
+# moving, so that check runs every week regardless of digest drift. This is the
+# update path for the apk pins; nothing in ci.yml gates on them, because live
+# repo drift would otherwise fail unrelated PRs. (Manual path: `make apk-pins`.)
 name: Wolfi base auto-refresh
 
 on:
@@ -57,18 +64,46 @@ jobs:
             echo "drift=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Bump the pin in all Dockerfiles
+      - name: Bump the digest pin in all Dockerfiles
         if: steps.check.outputs.drift == 'true'
         run: |
           set -euo pipefail
           for f in Dockerfile Dockerfile.hf Dockerfile.deep; do
             sed -i "s#${{ steps.check.outputs.pinned }}#${{ steps.check.outputs.live }}#g" "$f"
           done
+
+      # The digest pin alone does not freeze the toolchain: `apk add` resolves
+      # against the live Wolfi repo, so python/pip/build-base are pinned by
+      # version too. Those can drift *without* the digest moving (Chainguard
+      # publishes a package before rebuilding wolfi-base), so this runs
+      # unconditionally — otherwise an apk-only security update would never
+      # reach a PR.
+      - name: Re-pin apk package versions
+        id: apk
+        run: |
+          set -euo pipefail
+          python3 scripts/repin_apk.py
+          if git diff --quiet -- Dockerfile Dockerfile.hf Dockerfile.deep; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether anything drifted
+        id: drift
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.check.outputs.drift }}" = "true" ] \
+             || [ "${{ steps.apk.outputs.drift }}" = "true" ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
           git --no-pager diff -- Dockerfile Dockerfile.hf Dockerfile.deep
 
       - name: Build all three images on the new base
         id: build
-        if: steps.check.outputs.drift == 'true'
+        if: steps.drift.outputs.any == 'true'
         continue-on-error: true
         run: |
           set -uo pipefail
@@ -81,7 +116,7 @@ jobs:
 
       - name: Trivy — core
         id: tv_core
-        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -92,7 +127,7 @@ jobs:
 
       - name: Trivy — hf
         id: tv_hf
-        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -103,7 +138,7 @@ jobs:
 
       - name: Trivy — deep
         id: tv_deep
-        if: steps.check.outputs.drift == 'true' && steps.build.outputs.rc == '0'
+        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -114,7 +149,7 @@ jobs:
 
       - name: Assemble PR body
         id: body
-        if: steps.check.outputs.drift == 'true'
+        if: steps.drift.outputs.any == 'true'
         run: |
           verdict() {
             case "$1" in
@@ -125,12 +160,20 @@ jobs:
           }
           {
             echo "body<<PRBODY"
-            echo "Automated Wolfi base refresh — Chainguard rebuilt \`cgr.dev/chainguard/wolfi-base:latest\`, so the digest pin went stale."
-            echo ""
-            echo "| | digest |"
-            echo "|---|---|"
-            echo "| old (pinned) | \`${{ steps.check.outputs.pinned }}\` |"
-            echo "| new (\`:latest\`) | \`${{ steps.check.outputs.live }}\` |"
+            if [ "${{ steps.check.outputs.drift }}" = "true" ]; then
+              echo "Automated Wolfi base refresh — Chainguard rebuilt \`cgr.dev/chainguard/wolfi-base:latest\`, so the digest pin went stale."
+              echo ""
+              echo "| | digest |"
+              echo "|---|---|"
+              echo "| old (pinned) | \`${{ steps.check.outputs.pinned }}\` |"
+              echo "| new (\`:latest\`) | \`${{ steps.check.outputs.live }}\` |"
+            else
+              echo "Automated Wolfi refresh — the base digest is unchanged (\`${{ steps.check.outputs.pinned }}\`), but the pinned **apk package versions** drifted: Chainguard published newer packages than the ones currently pinned."
+            fi
+            if [ "${{ steps.apk.outputs.drift }}" = "true" ]; then
+              echo ""
+              echo "apk version pins were refreshed — see the diff for the exact bumps."
+            fi
             echo ""
             echo "**Build + Trivy on the new base** (HIGH/CRITICAL, fixed-only — same gate as CI):"
             echo "- core: $(verdict '${{ steps.tv_core.outcome }}')"
@@ -147,7 +190,7 @@ jobs:
 
       - name: Open / update refresh PR
         id: cpr
-        if: steps.check.outputs.drift == 'true'
+        if: steps.drift.outputs.any == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           # Fine-grained PAT / App token (Contents + Pull requests: write) so the
@@ -162,7 +205,7 @@ jobs:
             Dockerfile
             Dockerfile.hf
             Dockerfile.deep
-          commit-message: "build(deps): bump wolfi-base pin to ${{ steps.check.outputs.live }}"
+          commit-message: "build(deps): refresh wolfi-base pin (${{ steps.check.outputs.live }}) and apk version pins"
           signoff: true
           title: "build(deps): refresh Wolfi base image"
           labels: |
@@ -176,8 +219,8 @@ jobs:
       - name: Close stale drift issue
         if: >-
           always() &&
-          (steps.check.outputs.drift == 'false' ||
-           (steps.check.outputs.drift == 'true' && steps.cpr.outputs.pull-request-number))
+          (steps.drift.outputs.any == 'false' ||
+           (steps.drift.outputs.any == 'true' && steps.cpr.outputs.pull-request-number))
         uses: actions/github-script@v9
         with:
           script: |
