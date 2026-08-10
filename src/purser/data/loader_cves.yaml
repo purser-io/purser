@@ -12,7 +12,7 @@
 # `curated: true` are preserved verbatim across refreshes. Operators can point
 # PURSER_LOADER_CVES at their own copy without upgrading.
 #
-# Last refreshed: 2026-08-03 (source: OSV.dev; human-reviewed via PR)
+# Last refreshed: 2026-08-10 (source: OSV.dev; human-reviewed via PR)
 
 - cve: CVE-2024-3660
   framework: keras
@@ -116,12 +116,70 @@
   - keras_v3
   - keras_h5
   affected: <3.14.0
-  summary: Keras versions prior to 3.14.0 are vulnerable to a path traversal issue
-    in the archive extraction utilities located in `keras/src/utils/file_utils.py`.
-    The functions `filter_safe_tarinfos()` and `filter_safe_zipinfos()` validate
-    archive member paths against the process current working directory (CWD
-  reference: https://osv.dev/vulnerability/PYSEC-2026-2324
-  source: 'osv (keywords: path traversal,arbitrary file)'
+  summary: Keras archive extraction utilities allow path traversal and arbitrary
+    file writes
+  reference: https://osv.dev/vulnerability/GHSA-hqp4-2352-xf5r
+  source: 'osv (cwe: CWE-22)'
+- cve: CVE-2026-12479
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: DiskIOStore permits path traversal through crafted layer names'
+  reference: https://osv.dev/vulnerability/GHSA-gh82-f9x8-5frx
+  source: 'osv (cwe: CWE-22)'
+- cve: CVE-2026-12480
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: HDF5 virtual datasets can disclose local files'
+  reference: https://osv.dev/vulnerability/GHSA-26c4-7vv6-867j
+  source: 'osv (cwe: CWE-73)'
+- cve: CVE-2026-12481
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: Lambda deserialization can bypass safe mode and execute code'
+  reference: https://osv.dev/vulnerability/GHSA-5gwj-m78q-7pq3
+  source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-12482
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: tar extraction permits symlink-based path traversal'
+  reference: https://osv.dev/vulnerability/GHSA-58hv-7753-xmfq
+  source: 'osv (cwe: CWE-22)'
+- cve: CVE-2026-12484
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: TorchModuleWrapper can deserialize unsafe PyTorch pickle data'
+  reference: https://osv.dev/vulnerability/GHSA-v2w2-w228-c444
+  source: 'osv (cwe: CWE-502)'
 - cve: CVE-2026-1462
   framework: keras
   channel: keras_version
@@ -145,6 +203,18 @@
     Weight Loading
   reference: https://osv.dev/vulnerability/GHSA-3m4q-jmj6-r34q
   source: 'osv (cwe: CWE-73)'
+- cve: CVE-2026-9335
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected:
+  - <3.12.3
+  - '>=3.13.0,<3.15.0'
+  summary: 'Keras: HDF5 links can disclose local file contents'
+  reference: https://osv.dev/vulnerability/GHSA-m8wh-29wm-52mv
+  source: 'osv (cwe: CWE-22)'
 - cve: CVE-2023-6730
   framework: transformers
   channel: transformers_version
