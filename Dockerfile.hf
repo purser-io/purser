@@ -10,8 +10,14 @@ ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:30f03343947c7ae3581fda727a
 
 FROM ${WOLFI} AS build
 WORKDIR /app
-RUN apk add --no-cache python-3.14 python-3.14-dev py3.14-pip build-base \
-    && apk upgrade --no-cache
+# Versions are pinned because `apk add` resolves against the live Wolfi repo —
+# the digest pin above does not freeze the toolchain on its own. Refreshed with
+# the digest by wolfi-base-check.yml (manual path: `make apk-pins`).
+RUN apk add --no-cache \
+      python-3.14=3.14.7-r0 \
+      python-3.14-dev=3.14.7-r0 \
+      py3.14-pip=26.2.1-r0 \
+      build-base=1-r9
 RUN python3.14 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 COPY requirements-hf.lock ./
@@ -30,8 +36,8 @@ LABEL org.opencontainers.image.title="Purser-HF" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="cgr.dev/chainguard/wolfi-base:latest"
 
-RUN apk add --no-cache python-3.14 \
-    && apk upgrade --no-cache \
+RUN apk add --no-cache \
+      python-3.14=3.14.7-r0 \
     && mkdir -p /models /policies \
     && chown -R 10001:10001 /models /policies
 
