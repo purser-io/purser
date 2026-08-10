@@ -41,7 +41,7 @@ Total distributed dependencies: **39**
 | `certifi` | 2026.6.17 | MPL-2.0 |
 | `cffi` | 2.1.0 | MIT-0 |
 | `click` | 8.4.2 | BSD-3-Clause |
-| `cryptography` | 49.0.0 | Apache-2.0 OR BSD-3-Clause |
+| `cryptography` | 50.0.0 | Apache-2.0 OR BSD-3-Clause |
 | `fastapi` | 0.139.2 | MIT |
 | `filelock` | 3.30.3 | MIT |
 | `fsspec` | 2026.6.0 | BSD-3-Clause |

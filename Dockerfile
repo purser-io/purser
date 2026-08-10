@@ -24,6 +24,10 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir --no-deps .
+# venv creation seeds pip/setuptools via ensurepip, and the venv is copied into
+# the final stage — so they'd ship at runtime despite the "no pip" intent above.
+# pip also vendors its own deps (msgpack, setuptools), which the CVE gate flags.
+RUN pip uninstall -y setuptools && pip uninstall -y pip
 
 FROM ${WOLFI}
 LABEL org.opencontainers.image.title="Purser" \
