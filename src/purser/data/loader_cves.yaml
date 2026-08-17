@@ -12,7 +12,7 @@
 # `curated: true` are preserved verbatim across refreshes. Operators can point
 # PURSER_LOADER_CVES at their own copy without upgrading.
 #
-# Last refreshed: 2026-08-10 (source: OSV.dev; human-reviewed via PR)
+# Last refreshed: 2026-08-17 (source: OSV.dev; human-reviewed via PR)
 
 - cve: CVE-2024-3660
   framework: keras
