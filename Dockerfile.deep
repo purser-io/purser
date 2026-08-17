@@ -8,7 +8,7 @@
 # Same digest-pinned Wolfi / python-3.14 / venv build as the core image.
 
 # Pinned by digest for reproducible builds (update with: make base-digest).
-ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:30f03343947c7ae3581fda727a6e2aa7b8ce7009b7bfc2ab8d5c9483ace5812f
+ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:0a8fd427de5882aed77471b0a432c3675eda6b6a0ae952b5d640b46da628cdbe
 
 FROM ${WOLFI} AS build
 WORKDIR /app
@@ -16,8 +16,8 @@ WORKDIR /app
 # the digest pin above does not freeze the toolchain on its own. Refreshed with
 # the digest by wolfi-base-check.yml (manual path: `make apk-pins`).
 RUN apk add --no-cache \
-      python-3.14=3.14.7-r0 \
-      python-3.14-dev=3.14.7-r0 \
+      python-3.14=3.14.7-r1 \
+      python-3.14-dev=3.14.7-r1 \
       py3.14-pip=26.2.1-r0 \
       build-base=1-r9
 RUN python3.14 -m venv /venv
@@ -39,7 +39,7 @@ LABEL org.opencontainers.image.title="Purser-Deep" \
       org.opencontainers.image.base.name="cgr.dev/chainguard/wolfi-base:latest"
 
 RUN apk add --no-cache \
-      python-3.14=3.14.7-r0 \
+      python-3.14=3.14.7-r1 \
     && mkdir -p /models \
     && chown -R 10001:10001 /models
 
