@@ -10,7 +10,7 @@
 # this image on purpose; run the separate HF worker (Dockerfile.hf) for that.
 
 # Pinned by digest for reproducible builds (update with: make base-digest).
-ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:a31344ab2cb8618db84f535eec56f76f6178b142cb92cb2e48676cc2dcebea72
+ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:57108e597a8cf3bd376b810f1c3539c21942daefa242cb9dddaae30f8aac735d
 
 FROM ${WOLFI} AS build
 WORKDIR /app
@@ -19,8 +19,8 @@ WORKDIR /app
 # the digest pin above does not freeze the toolchain on its own. Refreshed with
 # the digest by wolfi-base-check.yml (manual path: `make apk-pins`).
 RUN apk add --no-cache \
-      python-3.14=3.14.7-r1 \
-      python-3.14-dev=3.14.7-r1 \
+      python-3.14=3.14.7-r4 \
+      python-3.14-dev=3.14.7-r4 \
       py3.14-pip=26.2.1-r0 \
       build-base=1-r9
 RUN python3.14 -m venv /venv
@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="Purser" \
 
 # Runtime python only — no pip, no compilers, no build tooling.
 RUN apk add --no-cache \
-      python-3.14=3.14.7-r1 \
+      python-3.14=3.14.7-r4 \
     && mkdir -p /models /policies \
     && chown -R 10001:10001 /models /policies
 
