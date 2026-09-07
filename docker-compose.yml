@@ -1,13 +1,18 @@
 services:
   purser:
-    build:
-      context: .
-      dockerfile: Dockerfile          # slim core image (no HuggingFace)
-    image: purser:dev
+    # Published multi-arch image (linux/amd64 + linux/arm64), anonymous pull —
+    # no clone or build needed. To hack on Purser itself, comment `image:` and
+    # uncomment `build:` to build the slim core image (no HuggingFace) locally.
+    image: ghcr.io/purser-io/purser:0.3.0
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:
-      PURSER_POLICY: /policies/strict.yaml
+      # Defaults to the policy baked into the image, so this file works with no
+      # clone. Point at /policies/strict.yaml once you mount ./policies below.
+      PURSER_POLICY: ${PURSER_POLICY:-/policies/default.yaml}
       PURSER_SCAN_ROOT: /models
       PURSER_MAX_UPLOAD_MB: "10240"
       PURSER_MAX_SCAN_MB: "4096"
@@ -19,8 +24,14 @@ services:
       PURSER_ENABLE_DEEP: ${PURSER_ENABLE_DEEP:-0}
       PURSER_DEEP_URL: ${PURSER_DEEP_URL:-}
     volumes:
-      - ./policies:/policies:ro
-      - ./models:/models:ro           # mount your model store here
+      # Your model store. Homelab examples:
+      #   PURSER_MODELS=~/.ollama/models   (Ollama)
+      #   PURSER_MODELS=/mnt/user/models   (Unraid share)
+      - ${PURSER_MODELS:-./models}:/models:ro
+      # Optional: mount the repo's policy set to use strict.yaml / signed-only.yaml.
+      # Requires a clone (or downloading policies/); the image already ships
+      # /policies/default.yaml, so leave this commented for a no-clone run.
+      # - ./policies:/policies:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -33,10 +44,10 @@ services:
   #              docker compose --profile deep up
   purser-deep:
     profiles: [deep]
-    build:
-      context: .
-      dockerfile: Dockerfile.deep
-    image: purser-deep:dev
+    image: ghcr.io/purser-io/purser-deep:0.3.0
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.deep
     environment:
       PURSER_API_KEY: ${PURSER_API_KEY:-}
     read_only: true
@@ -50,22 +61,22 @@ services:
   # Keep this on an egress-restricted node; it makes outbound calls to the Hub.
   purser-hf:
     profiles: [hf]
-    build:
-      context: .
-      dockerfile: Dockerfile.hf
-    image: purser-hf:dev
+    image: ghcr.io/purser-io/purser-hf:0.3.0
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.hf
     ports:
       - "8081:8080"
     environment:
-      PURSER_POLICY: /policies/strict.yaml
+      PURSER_POLICY: ${PURSER_POLICY:-/policies/default.yaml}
       PURSER_API_KEY: ${PURSER_API_KEY:-}
       PURSER_ENABLE_HF: "1"
       PURSER_HF_ALLOWLIST: ""     # scope to org/ prefixes in production
       # HF_TOKEN: ${HF_TOKEN}          # private HF repos; also auths upstream scan-verdict lookups
       # PURSER_SIGNALS: "0"            # opt out of upstream-verdict ingestion (fully offline)
       # PURSER_CARD_ATTESTATIONS: "1"  # opt-in model-card / eval-attestation gate
-    volumes:
-      - ./policies:/policies:ro
+    # volumes:
+    #   - ./policies:/policies:ro   # optional, needs a clone (see core service)
     read_only: true
     tmpfs:
       - /tmp

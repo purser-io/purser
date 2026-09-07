@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Community Applications template for Purser.
+
+  Runs the REST service against a read-only model share. Hardened by default:
+  non-root 10001:10001, read-only root filesystem, no privilege escalation, and
+  a tmpfs for scratch. No egress is required — the core image ships no HTTP
+  client stack and Purser never phones home.
+
+  For scheduled scanning instead of a long-lived service, see the User Scripts
+  recipe in docs/homelab.md §4.
+-->
+<Container version="2">
+  <Name>Purser</Name>
+  <Repository>ghcr.io/purser-io/purser:0.3.0</Repository>
+  <Registry>https://github.com/purser-io/purser/pkgs/container/purser</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/purser-io/purser/issues</Support>
+  <Project>https://github.com/purser-io/purser</Project>
+  <Overview>
+    Purser is an open-source model supply-chain control plane: it scans ML model
+    artifacts for malicious code and data-exfiltration indicators, checks
+    provenance/signatures, and renders one policy verdict (PASS / WARN / FAIL /
+    BLOCKED).
+
+    It never loads or executes a model — all analysis is byte- and opcode-level
+    — and format is detected by magic bytes rather than filename, so a payload
+    renamed to look benign is still caught. Runs fully offline.
+
+    Point the Model store path at your share (or at ~/.ollama/models to check
+    models pulled by Ollama; extensionless sha256- blobs are recognised as GGUF
+    automatically). The WebUI link performs a health check; use the CLI or the
+    REST API to run scans.
+
+    Note: a PASS means "clear of known malicious content", not "certified
+    safe". Purser does not detect trained/behavioural backdoors.
+  </Overview>
+  <Category>Tools: Security:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/healthz</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/purser-io/purser/main/deploy/unraid/purser.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/purser-io/purser/main/assets/brand/purser-mark.png</Icon>
+  <ExtraParams>--read-only --tmpfs /tmp --security-opt no-new-privileges:true --user 10001:10001</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp"
+          Description="Port for the REST API and /healthz."
+          Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Model store" Target="/models" Default="/mnt/user/models" Mode="ro"
+          Description="Your model share, mounted READ-ONLY. Purser never writes to it."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/models</Config>
+  <Config Name="API key" Target="PURSER_API_KEY" Default=""
+          Description="Require this key on /v1 endpoints (Bearer or X-API-Key). STRONGLY recommended if the port is reachable beyond your LAN — with no key set, /v1 is open by design for trusted networks."
+          Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Policy file" Target="PURSER_POLICY" Default="/policies/default.yaml"
+          Description="Policy path inside the container. The image ships /policies/default.yaml. Mount your own policy directory to use strict.yaml or signed-only.yaml."
+          Type="Variable" Display="advanced" Required="false" Mask="false">/policies/default.yaml</Config>
+  <Config Name="Scan root" Target="PURSER_SCAN_ROOT" Default="/models"
+          Description="Paths passed to the scan API must resolve under this root."
+          Type="Variable" Display="advanced" Required="false" Mask="false">/models</Config>
+  <Config Name="Max scan size (MB)" Target="PURSER_MAX_SCAN_MB" Default="4096"
+          Description="Skip files larger than this. Raise for large GGUF or multi-GB checkpoints."
+          Type="Variable" Display="advanced" Required="false" Mask="false">4096</Config>
+  <Config Name="Max concurrent scans" Target="PURSER_MAX_CONCURRENT_SCANS" Default="2"
+          Description="Concurrency cap. Keep low on a NAS so scanning does not starve other containers."
+          Type="Variable" Display="advanced" Required="false" Mask="false">2</Config>
+  <Config Name="Custom policies" Target="/policies" Default="/mnt/user/appdata/purser/policies" Mode="ro"
+          Description="Optional: a directory of policy YAML files, mounted read-only. Leave unset to use the policy baked into the image."
+          Type="Path" Display="advanced" Required="false" Mask="false"/>
+</Container>
