@@ -13,6 +13,7 @@ from purser import __version__
 from purser.core import approvals
 from purser.core.findings import ScanReport, Severity
 from purser.core.hf import HFNotAvailable, download_repo, parse_hf_uri
+from purser.core.mlbom import to_cyclonedx
 from purser.core.policy import Policy, PolicyError
 from purser.core.provenance import origin_db
 from purser.core.scanner import EXIT_CODES, scan_target
@@ -139,6 +140,8 @@ def _emit(report: ScanReport, fmt: str, output: str | None) -> None:
         text = json.dumps(report.to_dict(), indent=2)
     elif fmt == "sarif":
         text = json.dumps(_to_sarif(report), indent=2)
+    elif fmt == "cyclonedx":
+        text = json.dumps(to_cyclonedx(report), indent=2)
     else:
         if output:
             Path(output).write_text(json.dumps(report.to_dict(), indent=2))
@@ -158,7 +161,8 @@ def scan(
     origin: str = typer.Option(None, "--origin", help="Explicit country of origin (ISO 3166-1 alpha-2)"),
     publisher: str = typer.Option(None, "--publisher", help="Model publisher (e.g. HF org)"),
     repo_id_opt: str = typer.Option(None, "--repo-id", help="Logical model id/name for policy matching (e.g. org/name), for local scans"),
-    fmt: str = typer.Option("table", "--format", "-f", help="Output: table | json | sarif"),
+    fmt: str = typer.Option("table", "--format", "-f",
+                            help="Output: table | json | sarif | cyclonedx"),
     output: str = typer.Option(None, "--output", "-o", help="Write report to file"),
     revision: str = typer.Option(None, "--revision", help="HF revision when scanning hf:// targets"),
 ):

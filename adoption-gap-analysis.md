@@ -328,21 +328,34 @@ format scanning (`GGUF_BAD_MAGIC`, `GGUF_TEMPLATE_INJECTION`) but **no
 loader-CVE advisory**, because the signal keys off declared framework versions
 and GGUF carries none (§4.4).
 
-### Wave 2 — ML-BOM (1–2 weeks) — changes what Purser *is*
+### Wave 2 — ML-BOM ✅ SHIPPED
 
-New `src/purser/core/mlbom.py` mapping `ScanReport` → **CycloneDX 1.7**, wired
-as `--format cyclonedx` into the existing `cli.py:_emit` branch (which already
-handles `json` / `sarif`). Components of type `machine-learning-model`;
-loader-CVE findings into the `vulnerabilities` array; signature identity,
-publisher, and country into `modelCard`.
+`src/purser/core/mlbom.py` renders a `ScanReport` as **CycloneDX 1.7**, wired as
+`--format cyclonedx` into the existing `cli.py:_emit` branch.
 
-The data is already collected — `ScanReport` carries `files`, `publisher`,
-`origin`, `provenance_verified`, `signature_findings`, `signal_findings`,
-`metadata`. Nothing new needs detecting.
+The open question resolved immediately: **`FileResult` already carries
+`sha256`, `format`, and `size`** (`core/findings.py`), so no plumbing was
+needed — §3.2's claim that the data was already collected and discarded held
+up exactly.
 
-- **Acceptance:** output passes `cyclonedx validate --input-version v1_7`.
-- **Resolve first:** whether `FileReport` exposes a sha256 (the approvals path
-  implies it does) or needs plumbing.
+**Acceptance met:** output validated against the *official*
+`bom-1.7.schema.json` from the CycloneDX specification repo (with the `jsf` and
+`spdx` sub-schemas resolved) — **valid, zero errors**. 15 new tests, offline.
+
+Mapping decisions, each chosen to avoid overclaiming:
+
+| Decision | Why |
+|---|---|
+| Models are `machine-learning-model` components keyed by **SHA-256** | Same digest the admission approvals path uses, so a BOM entry and an admitted digest are directly comparable |
+| Loader CVEs under their **real CVE id**, `source: osv`; Purser rules as `purser:<RULE_ID>`, `source: purser` | A rule must never masquerade as a CVE. A test asserts this |
+| Ratings use `method: "other"` | Purser severities are policy-relative, not CVSS. Claiming CVSS would be false |
+| Declared framework attributed **per file**, not scan-wide | A directory can mix frameworks; smearing one version across components is wrong. Caught during implementation |
+| `serialNumber` = UUIDv5 over target + sorted digests | Content-addressed, so an unchanged scan yields the same serial |
+| Architecture / task / datasets / performance **absent, not guessed** | Purser never loads the model, so it cannot know them. An ML-BOM from a never-execute scanner is an accurate artifact inventory, not a substitute for a publisher's model card |
+
+One claim corrected mid-implementation: the first docstring said an unchanged
+scan yields a *byte-identical* BOM. It does not — `metadata.timestamp` moves by
+design. Everything else is byte-identical, and that is what the docs now say.
 
 ### Wave 3 — Compliance mapping (~1 week, mostly writing)
 
