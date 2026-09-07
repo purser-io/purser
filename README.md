@@ -53,19 +53,52 @@ hidden under a `README.md`, is still caught.
 > [!TIP]
 > **New here?** Start with the plain-language [user guides](docs/): one for
 > [setting up scanning in GitLab](docs/devsecops-gitlab.md), one for
-> [data scientists checking models](docs/data-scientists.md).
+> [data scientists checking models](docs/data-scientists.md), and one for
+> [running Purser in a homelab](docs/homelab.md) (Ollama, Unraid, K3s).
 
 > [!NOTE]
 > Pre-1.0. Published to **PyPI** — `pip install purser` — with signed container
 > images and a Helm chart on GHCR (see below). The name is pending trademark
 > clearance ([`BRAND.md`](BRAND.md)).
 
+## Quickstart — 60 seconds, no clone
+
+Scan a local model store with the published image. Multi-arch
+(`linux/amd64` + `linux/arm64`), anonymous pull, no build and no Python needed:
+
+```bash
+docker run --rm -v /path/to/models:/models:ro \
+  ghcr.io/purser-io/purser:0.3.0 purser scan /models
+```
+
+**Running local LLMs?** Ollama stores models as *extensionless* `sha256-…`
+blobs. Purser identifies formats by **magic bytes, not filenames**, so you can
+point it straight at the store and GGUF files are recognised anyway:
+
+```bash
+docker run --rm -v ~/.ollama/models:/models:ro \
+  ghcr.io/purser-io/purser:0.3.0 purser scan /models
+```
+
+Or without Docker:
+
+```bash
+pip install purser
+purser scan ~/.ollama/models
+```
+
+Exit codes are CI-ready — `0` pass/warn · `1` findings · `2` policy-blocked ·
+`3` error — so the same command gates a pipeline.
+
+→ **[Homelab guide](docs/homelab.md)** for Ollama/GGUF, Docker Compose, Unraid,
+and K3s recipes.
+
 ## Contents
 
 - [Using Purser](#using-purser) · [What it detects](#what-it-detects) · [How Purser compares](#how-purser-compares)
 - [Policy engine](#policy-engine) · [Verified provenance](#verified-provenance-model-signing) · [Authentication](#authentication-and-api-keys)
 - [Install & CLI](#install-and-cli-usage) · [REST API](#rest-api) · [Observability](#observability)
-- [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
+- [Quickstart](#quickstart--60-seconds-no-clone) · [Homelab](docs/homelab.md) · [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
 - [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [Contributing](#contributing) · [License](#license)
 
 ## Using Purser

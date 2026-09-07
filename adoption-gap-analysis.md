@@ -1,0 +1,390 @@
+# Purser — Adoption Gap Analysis
+
+Where the code actually is, what the 2026 market looks like, and what is missing
+to make Purser **enterprise-adoptable** or **trivially easy for a homelab**.
+
+Distinct from the two existing documents:
+[`gap_analysis.md`](gap_analysis.md) assesses *security* of the implementation;
+[`MarketResearch.md`](MarketResearch.md) covers *name/logo/licensing*. Neither
+answers "why would someone deploy this, and what stops them."
+
+_Reviewed: 2026-09-07 · against `main` @ `0d7ef74`_
+
+---
+
+## 1. Where the code actually is
+
+Measured, not claimed:
+
+| | |
+|---|---|
+| Source | **7,481 LOC** Python (`src/purser` + `src/purser_deep`) |
+| Tests | **4,269 LOC**, **353 passing** / 3 skipped, `ruff` clean |
+| Detections | **~70 rule IDs** across ~20 formats |
+| Published | PyPI `purser` **0.3.0** (6 releases) |
+| Traction | **2 stars, 0 forks**, repo created 2026-07-19 (~7 weeks old) |
+
+> ⚠️ `gap_analysis.md` says "~4.6k LOC, 181 automated tests" and is dated
+> 2026-07-19. The codebase has since roughly **doubled**. That document is
+> stale and understates the project.
+
+**What genuinely exists** — this is not a prototype:
+
+- **Detection breadth**: pickle (static `pickletools.genops`, never `Unpickler`),
+  PyTorch, Keras (H5 + v3, incl. non-`Lambda` custom layers), ONNX, TF
+  SavedModel, TFLite, GGUF, Paddle, CoreML, OpenVINO IR, skops, PMML, MAR,
+  ExecuTorch, NumPy, safetensors, archives (zip-slip/bomb), plus an
+  **exfiltration engine** and a **`trust_remote_code` AST analyzer**.
+- **Control-plane surface**: FastAPI REST (`api.py`), a Kubernetes
+  `ValidatingAdmissionWebhook` (`admission.py`), and a scan→approve→admit loop
+  (`core/approvals.py`).
+- **Provenance**: Ed25519 detached signing over a SHA-256 manifest with a trust
+  store (publisher + country, revocation, validity windows) **and** Sigstore
+  (Fulcio/Rekor) verification against a vendored trust root.
+- **Ops**: Prometheus `/metrics`, structured audit log, MITRE ATLAS tagging, a
+  20-template Helm chart (HPA, PDB, NetworkPolicy, ServiceMonitor,
+  PrometheusRule, `values.schema.json`), 3 digest-pinned Wolfi images
+  (non-root, read-only rootfs), a GitHub Action, and GitLab CI.
+- **Assurance**: OpenSSF Best Practices badge **passing** (project 13900);
+  a benchmark harness measuring detection, FPR, and evasion resistance.
+
+**Measured quality** (`benchmarks/results/`):
+
+| Metric | Value |
+|---|---|
+| Detection on known-answer set | 100% (12/12) |
+| False-positive rate | **0%** (0/79 benign, incl. 75 real HF models) |
+| Scan latency p50 / p95 | 267 ms / **21,978 ms** |
+
+Peer comparison on the same corpus: Purser 12/12, Fickling 7/7 (5 formats not
+attempted), ModelAudit 7/12, ModelScan 2/3 (9 not attempted), picklescan 5/12.
+
+**Honest read:** the engineering is well ahead of the adoption surface. Nothing
+below is a criticism of code quality — the gaps are packaging, evidence, and
+identity.
+
+---
+
+## 2. The 2026 market
+
+### Consolidation is essentially complete at the runtime layer
+
+| Acquirer | Target | Value | Date |
+|---|---|---|---|
+| Palo Alto Networks | Protect AI (ModelScan, Guardian) | ~$600M+ | Jul 2025 |
+| Cisco | Robust Intelligence | ~$400M | Sep 2024 |
+| Check Point | Lakera | ~$300M | Oct 2025 |
+| SentinelOne | Prompt Security | ~$180M | Sep 2025 |
+
+Every acquirer was an established security vendor **buying** the AI layer rather
+than building it. Protect AI is now folded into **Prisma AIRS 2.0**.
+
+### Category status
+
+- **AI-SPM** — fast-growing but at risk of becoming *"just a feature"* inside
+  CNAPP (Wiz/Google, Prisma Cloud, CrowdStrike, Tenable).
+- **AI red teaming / evals** — commoditizing (garak, promptfoo, Inspect).
+- **LLM firewalls** — consolidating, bundled into platforms.
+- **Model supply chain** — **"Emerging"**, described as *"underowned, asymmetric
+  upside"*. Players: HiddenLayer (AIBOM), Palo Alto, JFrog, Bosch AIShield.
+
+### Five gaps the market map calls explicitly unserved
+
+1. Indirect prompt-injection specialists
+2. Agent permissions at scale
+3. **Model supply chain beyond the Hub** — *"private models, internal
+   registries, and policy enforcement inside their own pipelines"*
+4. **Sovereign / air-gapped deployments** — *"tooling that operates fully
+   disconnected (no cloud inspection, local evidence retention, offline policy
+   updates) remains scarce"*
+5. Budget-conscious evals at enterprise scale
+
+**#3 and #4 are precisely what Purser is.** Offline-by-default, vendored intel
+with `PURSER_LOADER_CVES` / `PURSER_INTEL_URL` for air-gap, policy enforced in
+*your* CI and *your* admission controller, self-hosted with no callback. That is
+the single most important strategic fact in this document, and the positioning
+does not currently say it in these words.
+
+### The demand driver has shifted
+
+Buying is moving *"from demos to auditable evidence"*, pushed by the OWASP LLM
+Top 10 and regulatory deadlines. Concretely:
+
+- **EU AI Act** — 2 Aug 2026 is the binding date for high-risk obligations
+  (Arts. 9–17, 26) under current law. The Digital AI Omnibus **provisionally**
+  defers to 2 Dec 2027 / 2 Aug 2028, but it is **not formally adopted**;
+  practitioner guidance is to plan for August 2026.
+- **AIBOM** is moving from optional artifact to **procurement requirement**.
+  Two formats matured: **CycloneDX ML-BOM v1.7** (OWASP; the practical CI/CD
+  format) and **SPDX 3.0 AI + Dataset profiles** (ISO/IEC; the regulatory one).
+  G7 + EU published joint AI-SBOM guidance in May 2026. Adoption is still
+  *"early, often incomplete or inaccurate"* — i.e. the window is open.
+
+### Open source is compressing the baseline
+
+ModelScan, LLM Guard (~1M monthly HF downloads), garak, promptfoo, NeMo
+Guardrails all make baseline features free. **Consequence for Purser:** raw
+scanner recall is not a defensible wedge. The ROADMAP already concluded this
+("Purser orchestrates detection rather than competing on it") — the market data
+supports that call.
+
+### One competitive fact worth acting on
+
+The academic benchmark **arXiv 2608.27424** ("Beyond F1") evaluated ModelScan,
+ModelAudit, and Fickling over 170 artifacts / 145 families, and separates
+*judgment accuracy* from *judgment availability*. **Purser is absent.** Its own
+benchmark (12 malicious families) is an order of magnitude smaller. Meanwhile
+picklescan has 60+ GHSAs and Fickling 12 — the scanners themselves are a
+vulnerability class, which is an argument for Purser's never-execute design that
+nobody has made on its behalf.
+
+---
+
+## 3. Enterprise adoption gaps
+
+Ranked by how often each one *kills a deal*, not by effort.
+
+### 3.1 Identity — the hard blocker
+
+`api.py` authenticates with **comma-separated shared API keys**. That is it.
+
+- No OIDC/SSO, no SAML, no SCIM
+- No RBAC — every key is equal; no separation between "may scan", "may read
+  policy", and "may approve a digest"
+- No per-key identity, so the audit log cannot attribute an action to a person
+- No multi-tenancy
+
+Procurement research is blunt that *"SSO and SCIM are the two that block deals
+most often, because without them the customer cannot onboard or offboard users
+at their own scale."* A shared bearer token also means the `approvals` path —
+which decides what admission lets into the cluster — has **no attributable
+authorization**. For a security product that is the most serious gap here.
+
+### 3.2 No AIBOM / ML-BOM output — the biggest missed opportunity
+
+`scripts/gen_sbom.py` produces a CycloneDX SBOM of **Purser's own
+dependencies**. Nothing emits a bill of materials for the **models it scans**.
+
+Purser already extracts almost everything an ML-BOM needs — format, hashes,
+declared framework versions, provenance/signature identity, publisher, country
+of origin, CVE mapping, ATLAS tags — and throws it away into a JSON report.
+Emitting **CycloneDX ML-BOM v1.7** (and ideally SPDX 3.0 AI profile) would turn
+Purser from "a scanner" into "the thing that produces your EU AI Act Annex IV
+evidence," exactly as AIBOM becomes a procurement gate. This is the highest
+leverage-to-effort item in this document.
+
+### 3.3 No compliance mapping at all
+
+Reference counts across every `.md` in the repo:
+
+| Framework | Files mentioning it |
+|---|---|
+| NIST AI RMF | **0** |
+| ISO/IEC 42001 | **0** |
+| EU AI Act | **0** |
+| OWASP (LLM/ML Top 10) | **0** |
+| SOC 2 | **0** |
+| FedRAMP | **0** |
+| SLSA | 3 |
+
+MITRE ATLAS tagging exists in code and is genuinely good. But an enterprise
+buyer arrives with a control matrix, and there is no document that says "Purser
+rule X satisfies control Y." Since buying has shifted to *auditable evidence*,
+this is a paperwork gap with outsized commercial impact — and most of it is
+writing, not code.
+
+### 3.4 No incremental scanning
+
+There is no digest-keyed scan-result cache in `core/scanner.py` or
+`core/dispatch.py`. Every scan re-reads every byte. Combined with a **p95 of
+22 seconds** on real models, a CI gate over a large model registry re-scans
+unchanged multi-gigabyte artifacts on every run. This is the gap most likely to
+get Purser *removed* after a pilot.
+
+### 3.5 No registry / storage integrations
+
+Hits across `src/`: `s3` 0, `minio` 0, `boto` 0, `artifactory` 0, `nexus` 0,
+`harbor` 0, `azure` 0, `sagemaker` 0, `vertex` 0. `mlflow` appears 4 times but
+only as a *detection* rule (`MLFLOW_PYFUNC_LOADER`), not as an integration.
+
+The only fetch path is the HF Hub. Yet market gap #3 is *specifically* "private
+models, internal registries." Enterprise models live in S3/MinIO, Artifactory,
+MLflow Model Registry, SageMaker, and Vertex — none reachable today without the
+user staging files onto a volume first.
+
+### 3.6 Smaller but real
+
+- **Audit records** are JSON to stdout/syslog — no CEF/LEEF for SIEM ingestion,
+  and the records are unsigned, so the audit trail is not tamper-evident.
+- **Rate limiting is per-replica**, not cluster-global (already noted in
+  `gap_analysis.md` §4).
+- **Single maintainer, 2 stars.** The project's own CNCF assessment is correct:
+  Sandbox is plausible, Incubating (≥3 production adopters, multi-org
+  committers) is out of reach. No enterprise will adopt a solo-maintained
+  security control without either a support channel or a foundation behind it.
+
+---
+
+## 4. Homelab adoption gaps
+
+The 2026 homelab AI stack is **Ollama** (won on simplicity), vLLM+Ray,
+llama.cpp, **Docker Compose**, K3s, and Unraid 8 (now with native Compose).
+The dominant artifact format is **GGUF**.
+
+### 4.1 The word "Ollama" appears nowhere in this repository
+
+Zero matches across all `.py`, `.md`, `.yaml`, `.yml`. That is the entire
+homelab gap in one line — because:
+
+### 4.2 …the engine already works. It's a discoverability gap, not a capability gap
+
+I tested this directly. Ollama stores models as **extensionless
+`sha256-<hex>` blobs**. Purser's magic-byte sniffing handles them correctly:
+
+```
+files Purser would scan: ['sha256-aabbccddeeff001']
+verdict: PASS | files: 1
+  file: sha256-aabbccddeeff001 | format: gguf | findings: 0
+```
+
+`iter_scannable` + `detect_format` identify the blob as GGUF with no extension
+to go on. **`purser scan ~/.ollama/models` works today and nobody knows.** A
+README section, a compose recipe, and a blog post are worth more here than any
+code.
+
+### 4.3 Compose requires cloning and building
+
+`docker-compose.yml` uses `build:` + `image: purser:dev` for all three services.
+A homelabber must clone the repo and build three images. Every comparable
+self-hosted tool ships a copy-pasteable compose file with a **published
+`image:`** tag. Since images are already on GHCR, this is close to a one-line
+fix — `image: ghcr.io/purser-io/purser:0.3.0` with `build:` as fallback.
+
+### 4.4 The homelab-dominant format has the weakest intel coverage
+
+`loader_cves.yaml` version channels are **`keras_version` and
+`transformers_version` only**. GGUF/llama.cpp carries no version the artifact
+declares, which the ROADMAP already acknowledges. So the loader-CVE signal —
+one of the flagship "aggregation" features — is structurally blind to the format
+homelabs actually run. GGUF detection itself is fine
+(`GGUF_TEMPLATE_INJECTION`, `GGUF_BAD_MAGIC`).
+
+### 4.5 No zero-config on-ramp
+
+Getting value today means understanding policies, `PURSER_SCAN_ROOT`,
+`PURSER_API_KEY`, and which of three images to run. There is no
+`purser scan --quick ~/.ollama` story, no Unraid template, no `docker run
+--rm -v ~/.ollama:/models:ro ghcr.io/...` one-liner in the README's first
+screen. Homelab adoption is won on the first 60 seconds.
+
+> Also: `pyproject.toml` sets `Homepage = "https://purser-io.io"`. It resolves,
+> but the doubled `-io.io` looks like a typo worth confirming.
+
+---
+
+## 5. Execution plan
+
+Sequenced by leverage-per-effort, not by interest. Waves 1–3 are cheap and
+produce the adoption and evidence that make waves 5–7 worth building — they are
+also exactly the traction gates [`ROADMAP.md`](ROADMAP.md) identifies for CNCF
+Sandbox.
+
+### Wave 1 — Homelab on-ramp ✅ SHIPPED
+
+The optimal first move: near-zero code, unblocks everything downstream.
+
+Verified prerequisites before any docs were written:
+
+- `ghcr.io/purser-io/purser{,-hf,-deep}` are **anonymously pullable**, tagged
+  `0.3.0` / `0.3` / `latest`, with cosign `.sig` + `.att` present.
+- All three are **multi-arch** `linux/amd64` + `linux/arm64` — Raspberry Pi and
+  ARM NAS work unmodified.
+- The Dockerfile already sets `ENV PATH="/venv/bin:$PATH"`, `ENTRYPOINT []`,
+  pre-creates `/models`, and bakes in `/policies/default.yaml`, so
+  `docker run … purser scan /models` needed **no image change at all**.
+- `purser scan` on an Ollama-style store returns `PASS` with **exit code 0**.
+
+| Change | File |
+|---|---|
+| 60-second quickstart on the first screen | `README.md` |
+| Compose uses published images; `build:` kept as the dev path | `docker-compose.yml` |
+| Compose works with **no clone** — image-baked policy default, `PURSER_MODELS` for the model mount, repo-only mounts commented | `docker-compose.yml` |
+| Homelab guide — Ollama, Docker, Compose, Unraid, K3s, air-gap | `docs/homelab.md` |
+| Unraid Community Applications template | `deploy/unraid/purser.xml` |
+| Guide linked from both indexes | `README.md`, `docs/README.md` |
+
+Two accuracy fixes made while writing, both worth noting because the original
+plan was wrong:
+
+1. Compose mounted `./policies` and `./models`, which **do not exist without a
+   clone** — that silently broke the "no clone" claim. Now defaults to the
+   image's own policy.
+2. `admission`, `autoscaling`, and `ingress` already default to **false**, so
+   the K3s snippet no longer pretends they need disabling. A homelab install is
+   `--set replicaCount=1`.
+
+The Ollama gap is documented honestly rather than papered over: GGUF gets
+format scanning (`GGUF_BAD_MAGIC`, `GGUF_TEMPLATE_INJECTION`) but **no
+loader-CVE advisory**, because the signal keys off declared framework versions
+and GGUF carries none (§4.4).
+
+### Wave 2 — ML-BOM (1–2 weeks) — changes what Purser *is*
+
+New `src/purser/core/mlbom.py` mapping `ScanReport` → **CycloneDX 1.7**, wired
+as `--format cyclonedx` into the existing `cli.py:_emit` branch (which already
+handles `json` / `sarif`). Components of type `machine-learning-model`;
+loader-CVE findings into the `vulnerabilities` array; signature identity,
+publisher, and country into `modelCard`.
+
+The data is already collected — `ScanReport` carries `files`, `publisher`,
+`origin`, `provenance_verified`, `signature_findings`, `signal_findings`,
+`metadata`. Nothing new needs detecting.
+
+- **Acceptance:** output passes `cyclonedx validate --input-version v1_7`.
+- **Resolve first:** whether `FileReport` exposes a sha256 (the approvals path
+  implies it does) or needs plumbing.
+
+### Wave 3 — Compliance mapping (~1 week, mostly writing)
+
+Do **not** hand-write a table. Copy the project's own pattern: `core/atlas.py`
+already does data-driven tag enrichment from `data/atlas_map.yaml` with a kill
+switch. Mirror it as `data/compliance_map.yaml` emitting `owasp:ML06`,
+`nist:MEASURE-2.7`, `euaiact:AnnexIV-2b`, and generate
+`docs/compliance-mapping.md` from the same YAML. One mechanism, two outputs,
+no drift.
+
+### Wave 4 — Third-party benchmark (corpus + outreach)
+
+Grow `benchmarks/kat.py` past 12 families toward the arXiv harness's 145, then
+approach the authors for inclusion. Their metric — *judgment availability* vs
+*accuracy* — favours Purser: broad format coverage plus 0% FPR, against tools
+carrying 60+ GHSAs.
+
+### Waves 5–7 — The real blockers (months)
+
+| Item | Where | Note |
+|---|---|---|
+| **OIDC + RBAC** | `api.py:require_auth` → pluggable backend; JWKS validation; scopes for scan / read-policy / approve; per-identity attribution in `core/audit.py:build_record` | Biggest lift. Regulated buyers cannot start without it |
+| **Incremental cache** | `core/scanner.py`, keyed on `(sha256, scanner-version, policy-hash)` | Fixes the p95-22s pilot-killer. Highest ops payoff per line |
+| **S3/MinIO** | New `[s3]` extra; `s3://` targets mirroring the existing `hf://` path | MinIO also covers homelab NAS setups |
+
+### The trap
+
+Doing waves 5–7 first. OIDC and a scan cache are the most
+*engineering-satisfying* items and the least likely to win a user. Purser beats
+every OSS peer on its own corpus and has 2 stars — that is a distribution
+problem, and no amount of RBAC fixes it.
+
+### Caveat on this document
+
+The "two of five unserved gaps" framing that motivates waves 2–3 rests on a
+**single** market map. Worth corroborating against a second source before
+committing two weeks to ML-BOM.
+
+### The one-line strategic read
+
+Purser is a technically strong product aimed — apparently by accident — at
+**two of the five gaps the 2026 market map calls explicitly unserved**
+(air-gapped/sovereign, and supply chain beyond the Hub). It is losing on
+distribution and evidence, not on engineering. Fix the compose file and ship an
+ML-BOM before writing another detector.
