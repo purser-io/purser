@@ -20,11 +20,21 @@ Design constraints, kept deliberately:
     and the previous dataset stays in place.
   * **Air-gap friendly.** `PURSER_INTEL_URL` can point at an internal mirror;
     or skip the command entirely and drop a file via `PURSER_LOADER_CVES`.
+  * **Constrained transport.** Only `https://` is accepted, and `http://`
+    only with an explicit `PURSER_INTEL_ALLOW_HTTP=1` opt-in for internal
+    mirrors. Every other scheme — `file://`, `ftp://`, `data:` — is
+    rejected before the request is made, so a stray `PURSER_INTEL_URL`
+    cannot turn a local file into the active dataset. The response is
+    size-capped too. Note this constrains *transport*, not *provenance*:
+    the dataset is schema-validated but **not signed**, so an
+    unauthenticated `http://` mirror is trusted as far as the network is.
+    Dataset signing is the real fix and is tracked on the roadmap.
 """
 
 from __future__ import annotations
 
 import re
+import urllib.parse
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
@@ -39,9 +49,43 @@ DEFAULT_INTEL_URL = ("https://raw.githubusercontent.com/purser-io/purser/"
 _REFRESH_RE = re.compile(r"Last refreshed:\s*(\d{4}-\d{2}-\d{2})")
 STALE_AFTER_DAYS = 90
 
+# The dataset is tens of kilobytes; this cap exists so a hostile or
+# misconfigured endpoint can't stream an unbounded body into memory.
+MAX_INTEL_BYTES = 8 * 1024 * 1024
+
 
 def intel_url() -> str:
     return env_get("INTEL_URL", DEFAULT_INTEL_URL) or DEFAULT_INTEL_URL
+
+
+def _allow_http() -> bool:
+    return (env_get("INTEL_ALLOW_HTTP", "") or "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def check_url(url: str) -> str:
+    """Return `url` if its scheme is permitted, else raise ValueError.
+
+    Checked *before* the request: `urlopen` honours `file://`, `ftp://` and
+    friends, so an unvalidated `PURSER_INTEL_URL` would let a local file
+    install itself as the active CVE dataset.
+    """
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    if scheme == "https":
+        return url
+    if scheme == "http":
+        if _allow_http():
+            return url
+        raise ValueError(
+            "refusing to fetch intel over plain http: the dataset is "
+            "unsigned, so an http mirror is trusted as far as the network "
+            "is. Set PURSER_INTEL_ALLOW_HTTP=1 to override for an "
+            "internal mirror.")
+    raise ValueError(
+        f"unsupported intel URL scheme {scheme or '(none)'!r}: only "
+        "https (or http with PURSER_INTEL_ALLOW_HTTP=1) is permitted. To "
+        "load a local dataset, use PURSER_LOADER_CVES instead of "
+        "PURSER_INTEL_URL.")
 
 
 def user_intel_path() -> Path:
@@ -81,11 +125,17 @@ def refreshed_on(text: str) -> date | None:
 
 def update(url: str | None = None, dest: Path | None = None) -> dict:
     """Fetch, validate, atomically install. Returns a summary dict."""
-    url = url or intel_url()
+    url = check_url(url or intel_url())
     dest = dest or user_intel_path()
     req = urllib.request.Request(url, headers={"Accept": "text/plain"})
-    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
-        text = resp.read().decode()
+    # nosec B310 — scheme constrained by check_url above
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read(MAX_INTEL_BYTES + 1)
+    if len(raw) > MAX_INTEL_BYTES:
+        raise ValueError(
+            f"intel dataset exceeds {MAX_INTEL_BYTES} bytes — refusing "
+            "to install; check PURSER_INTEL_URL points at the dataset")
+    text = raw.decode()
     entries = validate_dataset(text)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".tmp")

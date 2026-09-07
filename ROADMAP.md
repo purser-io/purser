@@ -73,7 +73,8 @@ orchestrates detection rather than competing on it.
      regenerated from OSV.dev, model-scoped (tracked packages + load-time
      CWEs only), on a **weekly PR cadence** (`loader-cve-refresh.yml`);
      end users refresh without upgrading via **`purser update-intel`**
-     (validated HTTPS fetch to `~/.purser/`, staleness hint after 90 days,
+     (https-only fetch to `~/.purser/` — scheme-checked and size-capped,
+     schema-validated but *not* signed; staleness hint after 90 days,
      `PURSER_INTEL_URL` mirror + `PURSER_LOADER_CVES` for air-gap).
      Remaining: more version channels (llama.cpp/GGUF lacks one the
      artifact carries), and signing the published dataset (cosign) so
