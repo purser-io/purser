@@ -8,7 +8,26 @@ Distinct from the two existing documents:
 [`MarketResearch.md`](MarketResearch.md) covers *name/logo/licensing*. Neither
 answers "why would someone deploy this, and what stops them."
 
-_Reviewed: 2026-09-07 · against `main` @ `0d7ef74`_
+_First reviewed: 2026-09-07 against `main` @ `0d7ef74`_
+_Last reconciled: 2026-09-07 against `main` @ `7af2a2b` (after waves 1–3)_
+
+> [!NOTE]
+> **This document is maintained, not archived.** Waves 1–3 shipped from it, so
+> several findings below are now resolved and are marked as such — the original
+> evidence is kept, because it is what motivated the work and what a reader
+> needs to judge whether the fix was right.
+
+## Status at a glance
+
+| Gap | Section | Status |
+|---|---|---|
+| Identity — no SSO/RBAC | [§3.1](#31-identity--the-hard-blocker) | ❌ open — the hard blocker |
+| No AIBOM / ML-BOM output | [§3.2](#32-no-aibom--ml-bom-output---shipped-wave-2) | ✅ shipped (#32) |
+| No compliance mapping | [§3.3](#33-no-compliance-mapping-at-all---addressed-wave-3) | ✅ shipped (#33) |
+| No incremental scanning | [§3.4](#34-no-incremental-scanning) | ❌ open — pilot-killer |
+| No registry integrations | [§3.5](#35-no-registry--storage-integrations) | ❌ open |
+| Homelab: undiscoverable | [§4.1](#41-the-word-ollama-appeared-nowhere-in-this-repository---shipped-wave-1)–[§4.5](#45-no-zero-config-on-ramp---shipped-wave-1) | ✅ shipped (#31) |
+| GGUF has no loader-CVE channel | [§4.4](#44-the-homelab-dominant-format-has-the-weakest-intel-coverage) | ❌ open — documented, not fixed |
 
 ---
 
@@ -18,8 +37,8 @@ Measured, not claimed:
 
 | | |
 |---|---|
-| Source | **7,481 LOC** Python (`src/purser` + `src/purser_deep`) |
-| Tests | **4,269 LOC**, **353 passing** / 3 skipped, `ruff` clean |
+| Source | **7,839 LOC** Python (`src/purser` + `src/purser_deep`) |
+| Tests | **382 passing** / 3 skipped, `ruff` clean |
 | Detections | **~70 rule IDs** across ~20 formats |
 | Published | PyPI `purser` **0.3.0** (6 releases) |
 | Traction | **2 stars, 0 forks**, repo created 2026-07-19 (~7 weeks old) |
@@ -160,7 +179,16 @@ at their own scale."* A shared bearer token also means the `approvals` path —
 which decides what admission lets into the cluster — has **no attributable
 authorization**. For a security product that is the most serious gap here.
 
-### 3.2 No AIBOM / ML-BOM output — the biggest missed opportunity
+### 3.2 No AIBOM / ML-BOM output — ✅ SHIPPED (Wave 2)
+
+> **Resolved in #32.** `core/mlbom.py` emits CycloneDX 1.7 via
+> `--format cyclonedx`, validated against the official `bom-1.7.schema.json`.
+> The premise below held exactly: `FileResult` already carried `sha256`,
+> `format` and `size`, so no detection or plumbing was needed. SPDX 3.0 AI
+> profile remains unimplemented and is still worth its own issue.
+
+The original finding:
+
 
 `scripts/gen_sbom.py` produces a CycloneDX SBOM of **Purser's own
 dependencies**. Nothing emits a bill of materials for the **models it scans**.
@@ -237,10 +265,13 @@ The 2026 homelab AI stack is **Ollama** (won on simplicity), vLLM+Ray,
 llama.cpp, **Docker Compose**, K3s, and Unraid 8 (now with native Compose).
 The dominant artifact format is **GGUF**.
 
-### 4.1 The word "Ollama" appears nowhere in this repository
+### 4.1 The word "Ollama" appeared nowhere in this repository — ✅ SHIPPED (Wave 1)
 
-Zero matches across all `.py`, `.md`, `.yaml`, `.yml`. That is the entire
-homelab gap in one line — because:
+> **Resolved in #31.** Now referenced in `README.md`, `docs/homelab.md`,
+> `docker-compose.yml`, `deploy/unraid/purser.xml` and `docs/README.md`.
+
+The original finding: zero matches across all `.py`, `.md`, `.yaml`, `.yml`.
+That was the entire homelab gap in one line — because:
 
 ### 4.2 …the engine already works. It's a discoverability gap, not a capability gap
 
@@ -258,9 +289,18 @@ to go on. **`purser scan ~/.ollama/models` works today and nobody knows.** A
 README section, a compose recipe, and a blog post are worth more here than any
 code.
 
-### 4.3 Compose requires cloning and building
+### 4.3 Compose requires cloning and building — ✅ SHIPPED (Wave 1)
 
-`docker-compose.yml` uses `build:` + `image: purser:dev` for all three services.
+> **Resolved in #31.** All three services now reference published multi-arch
+> images with `build:` kept as the dev path. Two further bugs surfaced while
+> making "no clone" actually true: the compose file mounted `./policies` and
+> `./models`, neither of which exists without a clone. The policy now defaults
+> to the image-baked `/policies/default.yaml` and the model mount is
+> `PURSER_MODELS`.
+
+The original finding:
+
+`docker-compose.yml` used `build:` + `image: purser:dev` for all three services.
 A homelabber must clone the repo and build three images. Every comparable
 self-hosted tool ships a copy-pasteable compose file with a **published
 `image:`** tag. Since images are already on GHCR, this is close to a one-line
@@ -275,9 +315,14 @@ one of the flagship "aggregation" features — is structurally blind to the form
 homelabs actually run. GGUF detection itself is fine
 (`GGUF_TEMPLATE_INJECTION`, `GGUF_BAD_MAGIC`).
 
-### 4.5 No zero-config on-ramp
+### 4.5 No zero-config on-ramp — ✅ SHIPPED (Wave 1)
 
-Getting value today means understanding policies, `PURSER_SCAN_ROOT`,
+> **Resolved in #31.** A 60-second quickstart is now on the README's first
+> screen, `docs/homelab.md` covers Ollama / Docker / Compose / Unraid / K3s /
+> air-gap, and `deploy/unraid/purser.xml` is a Community Applications template.
+> The CA *listing* still needs a separate submission to the CA repo.
+
+The original finding: getting value meant understanding policies, `PURSER_SCAN_ROOT`,
 `PURSER_API_KEY`, and which of three images to run. There is no
 `purser scan --quick ~/.ollama` story, no Unraid template, no `docker run
 --rm -v ~/.ollama:/models:ro ghcr.io/...` one-liner in the README's first
