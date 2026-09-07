@@ -276,3 +276,8 @@ def test_refresh_script_filter_and_mapping():
     ghsa = {"id": "GHSA-a", "aliases": ["CVE-1-1"]}
     pysec = {"id": "PYSEC-b", "aliases": ["CVE-1-1"]}
     assert mod.dedupe_by_cve([pysec, ghsa])[0]["id"] == "GHSA-a"
+
+
+def test_rehearsal_forced_failure():
+    """TEMPORARY — scratch branch only, to rehearse the validation-failure path."""
+    assert False, "deliberate failure to exercise the workflow's failure path"
