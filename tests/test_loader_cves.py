@@ -13,9 +13,9 @@ from purser.core.scanner import scan_target
 from purser.signals import SignalContext
 from purser.signals.loader_cves import (
     LoaderCVEsSource,
-    _clear_at,
     _dataset,
     _in_range,
+    _vtuple,
 )
 
 
@@ -36,6 +36,11 @@ def make_h5_with_version(path: Path, keras_version: str) -> Path:
     return path
 
 
+def _specs(entry: dict) -> list[str]:
+    spec = entry.get("affected", "")
+    return [str(s) for s in (spec if isinstance(spec, list) else [spec])]
+
+
 def clean_version(framework: str) -> str:
     """The lowest version above every affected range for `framework`.
 
@@ -43,12 +48,30 @@ def clean_version(framework: str) -> str:
     time bomb: the weekly refresh job wedged when OSV published a transformers
     CVE fixed in 5.10.0, which swallowed a pinned "5.6.0" that had been clean
     the week before. The keras pin was one patch release from the same fate.
+
+    Handles both bound kinds, since `last_affected` ranges map to `<=`:
+    `<X` is cleared by X itself, `<=X` only by something above X.
     """
     entries = [e for e in _dataset() if e.get("framework") == framework]
     assert entries, f"no {framework} entries in the dataset"
-    if any(not _clear_at([e]) for e in entries):
-        pytest.skip(f"{framework} has an unfixed range — no version is clean")
-    return _clear_at(entries)
+
+    best: tuple[int, ...] = ()
+    for e in entries:
+        bounds = [part.strip() for s in _specs(e) for part in s.split(",")
+                  if part.strip().startswith("<")]
+        if not bounds:
+            # Affected from some version with no upper bound at all: nothing
+            # clears it, so no version can be asserted silent.
+            pytest.skip(f"{framework} has an unbounded range — none is clean")
+        for part in bounds:
+            if part.startswith("<="):
+                v = _vtuple(part[2:])
+                v = v[:-1] + (v[-1] + 1,) if v else v  # must exceed it
+            else:
+                v = _vtuple(part[1:])
+            best = max(best, v)
+    assert best, f"{framework}: no upper bound to derive a clean version from"
+    return ".".join(str(x) for x in best)
 
 
 def cves(findings):
@@ -206,6 +229,21 @@ def test_refresh_script_filter_and_mapping():
                               {"introduced": "3.13.0"}, {"fixed": "3.13.2"}]}]}]}
     assert mod.specs_from_affected(vuln, "keras") == [
         ">=3.0.0,<3.12.1", ">=3.13.0,<3.13.2"]
+
+    # `last_affected` is inclusive and has no `fixed` — the shape that
+    # silently dropped 8 transformers RCEs plus CVE-2024-55459.
+    last_affected = {"affected": [{"package": {"name": "transformers"},
+                                   "ranges": [{"type": "ECOSYSTEM", "events": [
+                                       {"introduced": "0"},
+                                       {"last_affected": "4.54.1"}]}]}]}
+    assert mod.specs_from_affected(last_affected, "transformers") == ["<=4.54.1"]
+
+    # introduced + last_affected -> a closed, inclusive window
+    window = {"affected": [{"package": {"name": "keras"},
+                            "ranges": [{"type": "ECOSYSTEM", "events": [
+                                {"introduced": "3.0.0"},
+                                {"last_affected": "3.7.0"}]}]}]}
+    assert mod.specs_from_affected(window, "keras") == [">=3.0.0,<=3.7.0"]
 
     unfixed = {"affected": [{"package": {"name": "keras"},
                              "ranges": [{"type": "ECOSYSTEM", "events": [
