@@ -14,6 +14,7 @@ Pick the guide that matches you:
 | A **data scientist / ML engineer** who downloads or uses models and wants to check they're safe | [**Data scientist guide**](data-scientists.md) |
 | Writing the **rules** for which models are allowed | [**Configuring a policy**](configuring-policy.md) |
 | Running models at home — **Ollama**, Docker, Unraid, K3s | [**Homelab guide**](homelab.md) |
+| Mapping findings to **OWASP / NIST AI RMF / EU AI Act** controls for an audit | [**Compliance mapping**](compliance-mapping.md) |
 | A **platform / Kubernetes operator** deploying the service, webhook, or dashboards | [Helm chart](../deploy/helm/purser/README.md) · [README: Kubernetes](../README.md#kubernetes) |
 
 New to the project? The top-level [README](../README.md) has the full feature
