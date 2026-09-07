@@ -168,19 +168,25 @@ def specs_from_affected(vuln: dict, package: str) -> list[str]:
         for rng in aff.get("ranges") or []:
             if rng.get("type") not in ("ECOSYSTEM", "SEMVER"):
                 continue
-            intro, fixed = "0", None
+            intro, closed = "0", False
             for ev in rng.get("events") or []:
                 if "introduced" in ev:
-                    intro = ev["introduced"]
-                if "fixed" in ev:
-                    fixed = ev["fixed"]
-                    parts = []
-                    if intro not in ("0", ""):
-                        parts.append(f">={intro}")
-                    parts.append(f"<{fixed}")
-                    specs.append(",".join(parts))
-                    intro, fixed = "0", None  # multiple windows per range
-            if fixed is None and intro not in ("0", ""):
+                    intro, closed = ev["introduced"], False
+                # A window closes on `fixed` (exclusive) or `last_affected`
+                # (inclusive). OSV uses the latter when no fixed release is
+                # known — common in the PYSEC mirrors, which is why handling
+                # only `fixed` silently dropped 9 load-time CVEs (8
+                # transformers deserialization/code-exec RCEs plus a keras
+                # traversal) as "no mappable affected range".
+                for key, op in (("fixed", "<"), ("last_affected", "<=")):
+                    if key in ev:
+                        parts = []
+                        if intro not in ("0", ""):
+                            parts.append(f">={intro}")
+                        parts.append(f"{op}{ev[key]}")
+                        specs.append(",".join(parts))
+                        intro, closed = "0", True  # multiple windows per range
+            if not closed and intro not in ("0", ""):
                 specs.append(f">={intro}")  # introduced, not yet fixed
     # dedupe, keep order
     seen: set[str] = set()
