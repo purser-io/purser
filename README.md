@@ -98,7 +98,7 @@ and K3s recipes.
 - [Using Purser](#using-purser) · [What it detects](#what-it-detects) · [How Purser compares](#how-purser-compares)
 - [Policy engine](#policy-engine) · [Verified provenance](#verified-provenance-model-signing) · [Authentication](#authentication-and-api-keys)
 - [Install & CLI](#install-and-cli-usage) · [REST API](#rest-api) · [Observability](#observability)
-- [Quickstart](#quickstart--60-seconds-no-clone) · [Homelab](docs/homelab.md) · [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
+- [Quickstart](#quickstart--60-seconds-no-clone) · [Homelab](docs/homelab.md) · [ML-BOM](#ai-bill-of-materials-ml-bom) · [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
 - [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [Contributing](#contributing) · [License](#license)
 
 ## Using Purser
@@ -422,6 +422,7 @@ purser scan ./model-dir --policy policies/strict.yaml
 purser scan hf://deepseek-ai/DeepSeek-R1 --policy policies/strict.yaml   # needs [hf]
 purser scan model.pkl --origin CN --format json -o report.json
 purser scan model.pkl --format sarif > report.sarif                     # CI integration
+purser scan ./model-dir --format cyclonedx -o mlbom.json                # CycloneDX 1.7 ML-BOM
 purser policy-check policies/strict.yaml
 purser origins deepseek-ai
 purser update-intel                    # refresh loader-CVE intel (no upgrade needed)
@@ -551,6 +552,44 @@ PURSER_AUDIT=syslog PURSER_SYSLOG_ADDRESS=logs.internal:514 uvicorn purser.api:a
 
 Both are driven from the central scan path, so the CLI and the API report
 identically.
+
+## AI bill of materials (ML-BOM)
+
+The same scan that gates a pipeline also emits a **CycloneDX 1.7 ML-BOM** — the
+artifact inventory procurement teams and EU AI Act Annex IV documentation ask
+for, with no second tool and no extra pass over the models:
+
+```bash
+purser scan ./model-dir --format cyclonedx -o mlbom.json
+```
+
+Each scanned file becomes a `machine-learning-model` component keyed by
+**SHA-256** — the same digest the [admission approvals](#kubernetes) path uses,
+so a BOM entry and an admitted digest are directly comparable. Alongside it:
+
+| In the BOM | From |
+|---|---|
+| format, size, SHA-256 | the scan itself |
+| declared framework + version, **per file** | the `loader-cves` version channel |
+| publisher, country of origin, signer identity, provenance-verified | the policy + provenance layer |
+| mapped CVEs with OSV references | the loader-CVE dataset |
+| MITRE ATLAS technique tags | ATLAS enrichment |
+
+Findings land in `vulnerabilities[]`: loader CVEs under their real CVE id with
+`source: osv`, and Purser's own rules as `purser:<RULE_ID>` with
+`source: purser` — a rule **never** masquerades as a CVE. Severity ratings use
+`method: "other"`, because Purser severities are policy-relative and not CVSS
+scores.
+
+The `serialNumber` is content-addressed (UUIDv5 over the target plus the sorted
+file digests), so an unchanged scan always produces the same serial and two
+BOMs of the same artifacts are directly comparable; everything but
+`metadata.timestamp` is byte-identical across runs.
+
+> Fields Purser cannot know without loading the model — model architecture,
+> task, training datasets, quantitative performance — are **left absent rather
+> than guessed**. An ML-BOM from a never-execute scanner is an accurate
+> inventory of the artifact, not a substitute for the publisher's model card.
 
 ## Authentication and API keys
 
