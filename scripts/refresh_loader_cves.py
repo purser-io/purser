@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.request
 from datetime import date
@@ -71,6 +72,41 @@ LOAD_KEYWORDS = (
 )
 EXCLUDE_KEYWORDS = ("redos", "regular expression denial",)
 
+# Save-time vulnerabilities are OUT of scope. The dataset's contract is load
+# time, and a bug in `save_pretrained()` bites when a victim *re-saves* an
+# artifact — not when the scanned artifact is loaded. Admitting one declares
+# every in-range `transformers_version` affected (i.e. nearly every current
+# model) for something loading never triggers: exactly the blanket per-format
+# noise this dataset promises not to emit. CVE-2026-9856 is the motivating
+# case — a `save_pretrained()` traversal that CWE-22 alone waved through.
+#
+# The veto is deliberately hard to trigger: it applies only when NOTHING in
+# the record suggests the bug also fires on load. Plenty of real load-time
+# traversals mention saving in passing (CVE-2026-12479 lives in the "model
+# saving and loading library" and fires when a model is "saved or loaded"),
+# so a loose match here would silently drop genuine entries.
+SAVE_KEYWORDS = (
+    "save_pretrained", "push_to_hub", "when saving", "while saving",
+    "saves the tokenizer",
+)
+
+# Any explicit mention of loading rescues a record from the save-time veto.
+# Word-bounded on purpose: "downloads and saves the tokenizer" (CVE-2026-9856)
+# must NOT read as a load mention, while "saving and loading" (CVE-2026-12479)
+# must. `load_model` and friends are matched by LOAD_TRIGGERS instead, since
+# `\b` does not fall between "load" and "_".
+_LOAD_MENTION = re.compile(r"\bload(s|ed|ing|er|ers)?\b")
+
+# Trigger-time evidence: WHEN the bug fires. Distinct from the mechanism words
+# in LOAD_KEYWORDS ("path traversal", "arbitrary file", "code execution"),
+# which describe WHAT it does and say nothing about the trigger — so those
+# must not rescue a save-only record.
+LOAD_TRIGGERS = (
+    "load_model", "deserial", "safe_mode", "from_pretrained",
+    "trust_remote_code", "pickle", "crafted model", "malicious model",
+    "crafted keras", "crafted archive",
+)
+
 
 def fetch_vulns(package: str, ecosystem: str) -> list[dict]:
     vulns: list[dict] = []
@@ -100,6 +136,11 @@ def is_load_relevant(vuln: dict) -> tuple[bool, str]:
     for kw in EXCLUDE_KEYWORDS:
         if kw in text:
             return False, f"excluded keyword: {kw}"
+    # before the CWE check: CWE-22 must not keep a save-only traversal
+    hit_save = [k for k in SAVE_KEYWORDS if k in text]
+    if hit_save and not (_LOAD_MENTION.search(text)
+                         or any(t in text for t in LOAD_TRIGGERS)):
+        return False, f"save-time only: {hit_save[0]}"
     cwes = set((vuln.get("database_specific") or {}).get("cwe_ids") or [])
     hit_cwe = cwes & LOAD_CWES
     hit_kw = [k for k in LOAD_KEYWORDS if k in text]

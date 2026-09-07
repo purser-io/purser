@@ -6,10 +6,17 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from purser.core.findings import Verdict
 from purser.core.scanner import scan_target
 from purser.signals import SignalContext
-from purser.signals.loader_cves import LoaderCVEsSource, _in_range
+from purser.signals.loader_cves import (
+    LoaderCVEsSource,
+    _clear_at,
+    _dataset,
+    _in_range,
+)
 
 
 def make_keras_v3(path: Path, keras_version: str) -> Path:
@@ -27,6 +34,21 @@ def make_h5_with_version(path: Path, keras_version: str) -> Path:
             b'{"class_name": "Sequential", "config": {"layers": []}}')
     path.write_bytes(body)
     return path
+
+
+def clean_version(framework: str) -> str:
+    """The lowest version above every affected range for `framework`.
+
+    Derived from the dataset instead of hardcoded. A pinned literal here is a
+    time bomb: the weekly refresh job wedged when OSV published a transformers
+    CVE fixed in 5.10.0, which swallowed a pinned "5.6.0" that had been clean
+    the week before. The keras pin was one patch release from the same fate.
+    """
+    entries = [e for e in _dataset() if e.get("framework") == framework]
+    assert entries, f"no {framework} entries in the dataset"
+    if any(not _clear_at([e]) for e in entries):
+        pytest.skip(f"{framework} has an unfixed range — no version is clean")
+    return _clear_at(entries)
 
 
 def cves(findings):
@@ -64,8 +86,7 @@ def test_vulnerable_keras_v3_declared_version_fires(tmp_path):
 
 
 def test_fixed_keras_version_is_silent(tmp_path):
-    # above every affected range in the refreshed dataset (latest fix: 3.14.0)
-    make_keras_v3(tmp_path / "model.keras", "3.15.0")
+    make_keras_v3(tmp_path / "model.keras", clean_version("keras"))
     assert LoaderCVEsSource().collect(SignalContext(target=tmp_path)) == []
 
 
@@ -126,7 +147,8 @@ def test_transformers_version_channel(tmp_path):
 
 def test_transformers_current_version_is_silent(tmp_path):
     (tmp_path / "config.json").write_text(json.dumps(
-        {"model_type": "bert", "transformers_version": "5.6.0"}))
+        {"model_type": "bert",
+         "transformers_version": clean_version("transformers")}))
     assert LoaderCVEsSource().collect(SignalContext(target=tmp_path)) == []
 
 
@@ -189,6 +211,29 @@ def test_refresh_script_filter_and_mapping():
                              "ranges": [{"type": "ECOSYSTEM", "events": [
                                  {"introduced": "2.0.0"}]}]}]}
     assert mod.specs_from_affected(unfixed, "keras") == [">=2.0.0"]
+
+    # Save-time only -> skipped. The CVE-2026-9856 shape: a CWE-22 traversal
+    # in save_pretrained with no load trigger. "downloads" must not register
+    # as a load mention, or the veto never bites.
+    save_only = {"id": "GHSA-s", "summary": "save_pretrained path traversal",
+                 "details": "chat_template keys are used directly as "
+                            "filenames; when a victim downloads and saves the "
+                            "tokenizer they escape the save directory",
+                 "database_specific": {"cwe_ids": ["CWE-22"]}}
+    relevant, reason = mod.is_load_relevant(save_only)
+    assert relevant is False
+    assert "save-time only" in reason
+
+    # ...but a traversal that fires on save OR load is kept (CVE-2026-12479).
+    # Worded to carry no LOAD_TRIGGERS term, so only the word-bounded load
+    # mention ("loading" / "loaded") can rescue it.
+    save_and_load = {"id": "GHSA-l", "summary": "DiskIOStore path traversal",
+                     "details": "in the Keras 3 model saving and loading "
+                                "library, an attacker-supplied layer name "
+                                "escapes the working directory when a model "
+                                "is saved or loaded",
+                     "database_specific": {"cwe_ids": ["CWE-22"]}}
+    assert mod.is_load_relevant(save_and_load)[0] is True
 
     ghsa = {"id": "GHSA-a", "aliases": ["CVE-1-1"]}
     pysec = {"id": "PYSEC-b", "aliases": ["CVE-1-1"]}
