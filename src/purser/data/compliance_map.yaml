@@ -1,0 +1,126 @@
+# Compliance framework mapping (enrichment only — not a signature source).
+#
+# Maps finding rule-id PREFIXES to control identifiers in the frameworks
+# enterprise reviewers arrive with. Longest matching prefix wins; every matched
+# finding also carries the `umbrella` controls, because any finding about a
+# model artifact is by construction a supply-chain control hit.
+#
+# Regenerate docs/compliance-mapping.md from this file with `make compliance-doc`.
+# Disable tagging with PURSER_COMPLIANCE=0.
+#
+# GRANULARITY, STATED HONESTLY:
+#   * OWASP ML / LLM ids are exact — the published Top 10 identifiers.
+#   * NIST AI RMF is mapped at CATEGORY level (GOVERN-6, MAP-4, MANAGE-3,
+#     MEASURE-2), not subcategory. The three categories scoped to third-party
+#     and supply-chain risk are GOVERN 6, MAP 4 and MANAGE 3; pinning specific
+#     subcategory decimals would imply a precision this mapping has not
+#     verified against NIST AI 100-1. Refine per your own control matrix.
+#   * EU AI Act references are to Annex IV SECTION numbers (1–9), which is the
+#     granularity Annex IV itself uses.
+#
+# A mapping is an aid to an auditor, not a compliance claim. Purser produces
+# evidence for these controls; it does not by itself satisfy them.
+
+frameworks:
+  owasp-ml:
+    name: OWASP Machine Learning Security Top 10 (2023)
+    url: https://owasp.org/www-project-machine-learning-security-top-10/
+    controls:
+      ML01: Input Manipulation Attack
+      ML02: Data Poisoning Attack
+      ML06: ML Supply Chain Attacks
+      ML09: Output Integrity Attack
+  owasp-llm:
+    name: OWASP Top 10 for LLM Applications (2025)
+    url: https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/
+    controls:
+      LLM01: Prompt Injection
+      LLM02: Sensitive Information Disclosure
+      LLM03: Supply Chain
+      LLM04: Data and Model Poisoning
+      LLM10: Unbounded Consumption
+  nist-ai-rmf:
+    name: NIST AI Risk Management Framework 1.0 (category level)
+    url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+    controls:
+      GOVERN-6: Policies and processes for third-party AI software and data risk
+      MAP-4: Risks mapped for all AI system components, including third-party
+      MANAGE-3: Risks and benefits from third-party entities are managed
+      MEASURE-2: Trustworthiness characteristics are evaluated and documented
+  eu-ai-act:
+    name: EU AI Act — Annex IV technical documentation
+    url: https://artificialintelligenceact.eu/annex/4/
+    controls:
+      AnnexIV-1: General description of the AI system
+      AnnexIV-2: Elements and development process, incl. cybersecurity measures
+      AnnexIV-4: Appropriateness of performance metrics
+      AnnexIV-5: Risk management system (Article 9)
+      AnnexIV-9: Post-market monitoring system (Article 72)
+
+# Applied to every matched finding: scanning a model artifact at all is
+# third-party supply-chain due diligence, and the evidence lands in the
+# Annex IV cybersecurity-measures section.
+umbrella:
+  - owasp-ml:ML06
+  - owasp-llm:LLM03
+  - nist-ai-rmf:GOVERN-6
+  - nist-ai-rmf:MANAGE-3
+  - eu-ai-act:AnnexIV-2
+
+# Longest matching prefix wins, as in atlas_map.yaml. `controls` here are
+# ADDITIONAL to the umbrella above.
+rules:
+  # Malicious code embedded in a model artifact — the core case. The umbrella
+  # already covers it; no framework has a more specific control than "supply
+  # chain" for "the file you loaded contained code".
+  - prefixes: [PICKLE_, PYTORCH_, KERAS_, TF_, TFLITE_, ONNX_, COREML_,
+               OPENVINO_, PADDLE_, SKOPS_, MAR_, MLFLOW_, CAFFE_, PMML_,
+               EXECUTORCH_, NUMPY_, SAFETENSORS_, GGUF_BAD_MAGIC]
+    controls: [nist-ai-rmf:MEASURE-2]
+
+  # `trust_remote_code` / auto_map source analysis — executable code shipped
+  # alongside weights.
+  - prefixes: [PY_, TRC_, AUTO_MAP, HF_CONFIG_REMOTE_CODE]
+    controls: [nist-ai-rmf:MEASURE-2]
+
+  # Chat-template injection fires when the model is *prompted*, which is
+  # prompt injection reached through the supply chain.
+  - prefixes: [GGUF_TEMPLATE_INJECTION]
+    controls: [owasp-llm:LLM01, owasp-ml:ML01]
+
+  # Exfiltration indicators: endpoints, secrets, encoded payloads.
+  - prefixes: [EXFIL_]
+    controls: [owasp-llm:LLM02, nist-ai-rmf:MEASURE-2]
+
+  # Resource exhaustion at load — zip bombs, shape bombs.
+  - prefixes: [ARCHIVE_ZIP_BOMB, DEEP_WEIGHTS_MALFORMED]
+    controls: [owasp-llm:LLM10]
+
+  - prefixes: [ARCHIVE_]
+    controls: [nist-ai-rmf:MEASURE-2]
+
+  # Weight tampering / steganography — the artifact itself is manipulated.
+  - prefixes: [DEEP_WEIGHTS_, DEEP_STEGO]
+    controls: [owasp-llm:LLM04, owasp-ml:ML02, owasp-ml:ML09]
+
+  - prefixes: [DEEP_GADGET_]
+    controls: [nist-ai-rmf:MEASURE-2]
+
+  # Known load-time CVEs in the declared framework version. Ongoing intel
+  # refresh is post-market monitoring.
+  - prefixes: [LOADER_CVE]
+    controls: [nist-ai-rmf:MEASURE-2, eu-ai-act:AnnexIV-9]
+
+  # Third-party verdicts and denylists — explicitly third-party risk management.
+  - prefixes: [HF_UPSTREAM_, POLICY_DENYLIST_]
+    controls: [nist-ai-rmf:MAP-4, eu-ai-act:AnnexIV-9]
+
+  # Provenance: signatures, Sigstore identity, trust store.
+  - prefixes: [SIGNATURE_, SIGSTORE_, PROVENANCE_]
+    controls: [nist-ai-rmf:MAP-4, eu-ai-act:AnnexIV-5]
+
+  # Model-card / eval attestation gate — documentation and metrics, not
+  # malicious content, so the supply-chain umbrella is a poor fit here.
+  - prefixes: [CARD_]
+    controls: [nist-ai-rmf:MAP-4, eu-ai-act:AnnexIV-1, eu-ai-act:AnnexIV-4]
+    no_umbrella: true

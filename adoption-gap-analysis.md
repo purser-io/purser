@@ -173,9 +173,15 @@ Purser from "a scanner" into "the thing that produces your EU AI Act Annex IV
 evidence," exactly as AIBOM becomes a procurement gate. This is the highest
 leverage-to-effort item in this document.
 
-### 3.3 No compliance mapping at all
+### 3.3 No compliance mapping at all — ✅ ADDRESSED (Wave 3)
 
-Reference counts across every `.md` in the repo:
+> **Resolved.** `data/compliance_map.yaml` + `core/compliance.py` now tag every
+> finding with OWASP ML / OWASP LLM / NIST AI RMF / EU AI Act Annex IV
+> controls, and generate [`docs/compliance-mapping.md`](docs/compliance-mapping.md)
+> from the same file. The counts below are what prompted the work.
+
+Reference counts across every `.md` in the repo, **as of 2026-09-07 before
+Wave 3**:
 
 | Framework | Files mentioning it |
 |---|---|
@@ -357,14 +363,44 @@ One claim corrected mid-implementation: the first docstring said an unchanged
 scan yields a *byte-identical* BOM. It does not — `metadata.timestamp` moves by
 design. Everything else is byte-identical, and that is what the docs now say.
 
-### Wave 3 — Compliance mapping (~1 week, mostly writing)
+### Wave 3 — Compliance mapping ✅ SHIPPED
 
-Do **not** hand-write a table. Copy the project's own pattern: `core/atlas.py`
-already does data-driven tag enrichment from `data/atlas_map.yaml` with a kill
-switch. Mirror it as `data/compliance_map.yaml` emitting `owasp:ML06`,
-`nist:MEASURE-2.7`, `euaiact:AnnexIV-2b`, and generate
-`docs/compliance-mapping.md` from the same YAML. One mechanism, two outputs,
-no drift.
+Built as planned, by mirroring `core/atlas.py`: `data/compliance_map.yaml` is
+the single source of truth for both the finding tags and the generated
+[`docs/compliance-mapping.md`](docs/compliance-mapping.md)
+(`make compliance-doc`). A test fails CI if the committed doc goes stale, so
+the tags a reviewer greps and the table they read cannot drift apart. Tags also
+ride into the ML-BOM from Wave 2, so the document handed to an auditor carries
+the control references with it. `PURSER_COMPLIANCE=0` disables.
+
+**The control ids were verified against published sources, not written from
+memory** — a compliance mapping with invented identifiers is worse than none:
+
+| Framework | Granularity | Basis |
+|---|---|---|
+| OWASP ML Top 10 (2023) | exact ids | published Top 10 |
+| OWASP LLM Top 10 (2025) | exact ids | published Top 10 |
+| NIST AI RMF 1.0 | **category level only** (`GOVERN-6`, `MAP-4`, `MANAGE-3`, `MEASURE-2`) | the three categories scoped to third-party/supply-chain risk are GOVERN 6, MAP 4, MANAGE 3 |
+| EU AI Act | Annex IV **section** numbers (1–9) | the granularity Annex IV itself uses |
+
+The plan sketched ids like `nist:MEASURE-2.7` and `euaiact:AnnexIV-2b`. Those
+subcategory decimals and sub-letters could **not** be verified against NIST AI
+100-1 or the Annex IV text, so the mapping deliberately stops at the
+granularity it can defend and says so in both the YAML header and the doc.
+Refining to subcategories is left to the operator's own control matrix.
+
+Two modelling calls worth noting:
+
+* `CARD_*` findings are **excluded from the supply-chain umbrella** — a missing
+  model card is a documentation gap, not a supply-chain attack. They map to
+  Annex IV(1) and (4) instead.
+* `GGUF_TEMPLATE_INJECTION` gets `owasp-llm:LLM01` *and* `LLM03` — it fires
+  when the model is prompted, but arrived through the supply chain.
+
+The doc also carries a **"coverage this mapping does not claim"** section:
+Purser produces no evidence for training-data governance, behavioural
+evaluation, human oversight, or incident reporting, and an auditor should not
+read a Purser report as covering them.
 
 ### Wave 4 — Third-party benchmark (corpus + outreach)
 

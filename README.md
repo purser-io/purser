@@ -98,7 +98,7 @@ and K3s recipes.
 - [Using Purser](#using-purser) · [What it detects](#what-it-detects) · [How Purser compares](#how-purser-compares)
 - [Policy engine](#policy-engine) · [Verified provenance](#verified-provenance-model-signing) · [Authentication](#authentication-and-api-keys)
 - [Install & CLI](#install-and-cli-usage) · [REST API](#rest-api) · [Observability](#observability)
-- [Quickstart](#quickstart--60-seconds-no-clone) · [Homelab](docs/homelab.md) · [ML-BOM](#ai-bill-of-materials-ml-bom) · [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
+- [Quickstart](#quickstart--60-seconds-no-clone) · [Homelab](docs/homelab.md) · [ML-BOM](#ai-bill-of-materials-ml-bom) · [Compliance](#compliance-mapping) · [Docker](#docker) · [Deep analysis](#deep-analysis-optional-companion) · [Signal sources](#signal-sources-upstream-intelligence) · [Supply chain](#supply-chain-of-purser-itself) · [Kubernetes](#kubernetes)
 - [Security model](#security-model) · [Development](#development) · [Docs & security](#roadmap-and-security-posture) · [Contributing](#contributing) · [License](#license)
 
 ## Using Purser
@@ -590,6 +590,35 @@ BOMs of the same artifacts are directly comparable; everything but
 > task, training datasets, quantitative performance — are **left absent rather
 > than guessed**. An ML-BOM from a never-execute scanner is an accurate
 > inventory of the artifact, not a substitute for the publisher's model card.
+
+## Compliance mapping
+
+Every finding is tagged with the controls it produces evidence for, so a scan
+report answers "which control does this serve?" without a human re-deriving the
+mapping:
+
+```bash
+purser scan ./model-dir --format json | jq '.files[].findings[].tags'
+# ["malicious-code", "atlas:AML.T0011", "owasp-llm:LLM03", "eu-ai-act:AnnexIV-2", ...]
+```
+
+Frameworks covered: **OWASP ML Top 10 (2023)**, **OWASP Top 10 for LLM
+Applications (2025)**, **NIST AI RMF 1.0**, and **EU AI Act Annex IV**. The
+tags also ride into the [ML-BOM](#ai-bill-of-materials-ml-bom), so the document
+you hand an auditor carries the control references with it.
+
+The mapping is data (`purser/data/compliance_map.yaml`), and the same file
+generates [`docs/compliance-mapping.md`](docs/compliance-mapping.md)
+(`make compliance-doc`) — one source of truth, so the tags you grep and the
+table you read cannot drift. A test fails CI if the committed doc goes stale.
+Disable tagging with `PURSER_COMPLIANCE=0`.
+
+> [!IMPORTANT]
+> **A mapping is an aid to an auditor, not a compliance claim.** Purser
+> produces evidence for these controls; it does not by itself satisfy them.
+> NIST AI RMF is mapped at *category* level, not subcategory — the
+> [mapping doc](docs/compliance-mapping.md) states the granularity of each
+> framework rather than implying more precision than was verified.
 
 ## Authentication and API keys
 

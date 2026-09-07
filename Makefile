@@ -10,7 +10,7 @@ CORE_IMAGE  := $(REGISTRY)$(IMAGE):$(TAG)
 HF_IMAGE    := $(REGISTRY)$(IMAGE)-hf:$(TAG)
 VERSION     := $(shell python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 
-.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest apk-pins apk-pins-verify sigstore-trust-root loader-cves
+.PHONY: help build-deep lock lock-verify sbom licenses build build-hf build-all buildx-all sign verify-sig scan scan-deps test clean base-digest apk-pins apk-pins-verify sigstore-trust-root loader-cves compliance-doc
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -44,6 +44,9 @@ sbom: ## Generate CycloneDX SBOMs (license-aware) from the lockfiles
 licenses: sbom ## Regenerate THIRD_PARTY_LICENSES.md from the SBOMs
 	python scripts/gen_third_party_licenses.py THIRD_PARTY_LICENSES.md \
 	  sbom/purser-core.cdx.json sbom/purser-hf.cdx.json sbom/purser-deep.cdx.json
+
+compliance-doc: ## Regenerate docs/compliance-mapping.md from the compliance map
+	python scripts/gen_compliance_doc.py docs/compliance-mapping.md
 
 base-digest: ## Print the current Wolfi base manifest digest (to update the pin)
 	@docker buildx imagetools inspect cgr.dev/chainguard/wolfi-base:latest --format '{{.Manifest.Digest}}'
