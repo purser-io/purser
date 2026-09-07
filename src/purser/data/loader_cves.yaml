@@ -12,7 +12,7 @@
 # `curated: true` are preserved verbatim across refreshes. Operators can point
 # PURSER_LOADER_CVES at their own copy without upgrading.
 #
-# Last refreshed: 2026-08-24 (source: OSV.dev; human-reviewed via PR)
+# Last refreshed: 2026-09-07 (source: OSV.dev; human-reviewed via PR)
 
 - cve: CVE-2024-3660
   framework: keras
@@ -24,6 +24,16 @@
   summary: Keras code injection vulnerability
   reference: https://osv.dev/vulnerability/GHSA-x4wf-678h-2pmq
   source: 'osv (cwe: CWE-94)'
+- cve: CVE-2024-55459
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <=3.7.0
+  summary: keras Path Traversal vulnerability
+  reference: https://osv.dev/vulnerability/GHSA-cjgq-5qmw-rcj6
+  source: 'osv (cwe: CWE-22)'
 - cve: CVE-2025-12058
   framework: keras
   channel: keras_version
@@ -180,6 +190,17 @@
   summary: 'Keras: TorchModuleWrapper can deserialize unsafe PyTorch pickle data'
   reference: https://osv.dev/vulnerability/GHSA-v2w2-w228-c444
   source: 'osv (cwe: CWE-502)'
+- cve: CVE-2026-12570
+  framework: keras
+  channel: keras_version
+  formats:
+  - keras_v3
+  - keras_h5
+  affected: <3.15.0
+  summary: Keras model loading is vulnerable to denial of service through HDF5 shape
+    bombs
+  reference: https://osv.dev/vulnerability/GHSA-74m6-m3xx-3vmj
+  source: 'osv (cwe: CWE-770)'
 - cve: CVE-2026-1462
   framework: keras
   channel: keras_version
@@ -269,6 +290,102 @@
   summary: Transformers Deserialization of Untrusted Data vulnerability
   reference: https://osv.dev/vulnerability/GHSA-37q5-v5qm-c9v8
   source: 'osv (cwe: CWE-502)'
+- cve: CVE-2025-14920
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.54.1
+  summary: 'Hugging Face Transformers Perceiver Model Deserialization of Untrusted
+    Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers
+    to execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerability in '
+  reference: https://osv.dev/vulnerability/PYSEC-2025-211
+  source: 'osv (keywords: deserial,arbitrary code,code execution)'
+- cve: CVE-2025-14921
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.54.1
+  summary: Hugging Face Transformers Transformer-XL Model Deserialization of Untrusted
+    Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers
+    to execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerabilit
+  reference: https://osv.dev/vulnerability/PYSEC-2025-212
+  source: 'osv (keywords: deserial,arbitrary code,code execution)'
+- cve: CVE-2025-14924
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.55.0
+  summary: Hugging Face Transformers megatron_gpt2 Deserialization of Untrusted
+    Data Remote Code Execution Vulnerability. This vulnerability allows remote attackers
+    to execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerability in th
+  reference: https://osv.dev/vulnerability/PYSEC-2025-213
+  source: 'osv (keywords: deserial,arbitrary code,code execution)'
+- cve: CVE-2025-14926
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.57.0
+  summary: 'Hugging Face Transformers SEW convert_config Code Injection Remote Code
+    Execution Vulnerability. This vulnerability allows remote attackers to execute
+    arbitrary code on affected installations of Hugging Face Transformers. User
+    interaction is required to exploit this vulnerability in that the target '
+  reference: https://osv.dev/vulnerability/PYSEC-2025-214
+  source: 'osv (keywords: arbitrary code,code execution)'
+- cve: CVE-2025-14927
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.57.0
+  summary: Hugging Face Transformers SEW-D convert_config Code Injection Remote
+    Code Execution Vulnerability. This vulnerability allows remote attackers to
+    execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerability in that the targe
+  reference: https://osv.dev/vulnerability/PYSEC-2025-215
+  source: 'osv (keywords: arbitrary code,code execution)'
+- cve: CVE-2025-14928
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.57.0
+  summary: Hugging Face Transformers HuBERT convert_config Code Injection Remote
+    Code Execution Vulnerability. This vulnerability allows remote attackers to
+    execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerability in that the targ
+  reference: https://osv.dev/vulnerability/PYSEC-2025-216
+  source: 'osv (keywords: arbitrary code,code execution)'
+- cve: CVE-2025-14929
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=5.0.0-rc0
+  summary: Hugging Face Transformers X-CLIP Checkpoint Conversion Deserialization
+    of Untrusted Data Remote Code Execution Vulnerability. This vulnerability allows
+    remote attackers to execute arbitrary code on affected installations of Hugging
+    Face Transformers. User interaction is required to exploit this vuln
+  reference: https://osv.dev/vulnerability/PYSEC-2025-217
+  source: 'osv (keywords: deserial,arbitrary code,code execution)'
+- cve: CVE-2025-14930
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: <=4.57.1
+  summary: Hugging Face Transformers GLM4 Deserialization of Untrusted Data Remote
+    Code Execution Vulnerability. This vulnerability allows remote attackers to
+    execute arbitrary code on affected installations of Hugging Face Transformers.
+    User interaction is required to exploit this vulnerability in that the ta
+  reference: https://osv.dev/vulnerability/PYSEC-2025-218
+  source: 'osv (keywords: deserial,arbitrary code,code execution)'
 - cve: CVE-2026-1839
   framework: transformers
   channel: transformers_version
