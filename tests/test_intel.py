@@ -36,8 +36,10 @@ class FakeHTTP:
         body = self.body
 
         class R:
-            def read(self):
-                return body.encode()
+            # match urllib's real signature: update() reads with a size cap
+            def read(self, n=-1):
+                data = body.encode()
+                return data if n is None or n < 0 else data[:n]
 
             def __enter__(self):
                 return self
@@ -182,3 +184,57 @@ def test_cli_update_intel_rejects_bad_fetch(monkeypatch):
     result = runner.invoke(app, ["update-intel"])
     assert result.exit_code == 3
     assert "Rejected" in result.output
+
+
+# -- transport hardening -----------------------------------------------------------
+
+@pytest.mark.parametrize("url", [
+    "file:///etc/passwd",
+    "file:///tmp/fake_intel.yaml",
+    "ftp://example.invalid/loader_cves.yaml",
+    "data:text/plain,- cve: X",
+    "/tmp/fake_intel.yaml",          # bare path, no scheme
+    "",
+])
+def test_check_url_rejects_non_http_schemes(url):
+    """`urlopen` honours file:// and friends — an unvalidated PURSER_INTEL_URL
+    would let a local file install itself as the active CVE dataset."""
+    with pytest.raises(ValueError, match="unsupported intel URL scheme"):
+        intel.check_url(url)
+
+
+def test_check_url_accepts_https():
+    assert intel.check_url("https://example.test/x.yaml").startswith("https://")
+
+
+def test_plain_http_needs_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("PURSER_INTEL_ALLOW_HTTP", raising=False)
+    with pytest.raises(ValueError, match="plain http"):
+        intel.check_url("http://mirror.internal/x.yaml")
+
+    monkeypatch.setenv("PURSER_INTEL_ALLOW_HTTP", "1")
+    assert intel.check_url("http://mirror.internal/x.yaml").startswith("http://")
+
+
+def test_update_refuses_a_file_url_end_to_end(monkeypatch, tmp_path):
+    """Regression: this exact URL previously installed as the active dataset."""
+    local = tmp_path / "fake_intel.yaml"
+    local.write_text(GOOD.format(stamp="2026-08-01"))
+    monkeypatch.setenv("PURSER_INTEL_URL", local.as_uri())
+    with pytest.raises(ValueError, match="unsupported intel URL scheme"):
+        intel.update()
+
+
+def test_oversized_response_is_refused(monkeypatch):
+    fake = FakeHTTP("#" * (intel.MAX_INTEL_BYTES + 10))
+    monkeypatch.setattr("purser.core.intel.urllib.request.urlopen", fake.urlopen)
+    with pytest.raises(ValueError, match="exceeds"):
+        intel.update(url="https://example.test/x.yaml")
+
+
+def test_response_at_the_cap_is_still_accepted(monkeypatch):
+    body = GOOD.format(stamp="2026-08-01")
+    assert len(body.encode()) < intel.MAX_INTEL_BYTES
+    fake = FakeHTTP(body)
+    monkeypatch.setattr("purser.core.intel.urllib.request.urlopen", fake.urlopen)
+    assert intel.update(url="https://example.test/x.yaml")["entries"] == 1
