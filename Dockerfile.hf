@@ -16,7 +16,7 @@ WORKDIR /app
 RUN apk add --no-cache \
       python-3.14=3.14.7_git20260925-r0 \
       python-3.14-dev=3.14.7_git20260925-r0 \
-      py3.14-pip=26.2.1-r1 \
+      py3.14-pip=26.2.1-r2 \
       build-base=1-r9
 RUN python3.14 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
