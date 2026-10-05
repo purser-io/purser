@@ -12,7 +12,7 @@
 # `curated: true` are preserved verbatim across refreshes. Operators can point
 # PURSER_LOADER_CVES at their own copy without upgrading.
 #
-# Last refreshed: 2026-09-28 (source: OSV.dev; human-reviewed via PR)
+# Last refreshed: 2026-10-05 (source: OSV.dev; human-reviewed via PR)
 
 - cve: CVE-2024-3660
   framework: keras
@@ -415,3 +415,13 @@
     in the LightGlue Model Loading Path'
   reference: https://osv.dev/vulnerability/GHSA-fgcw-684q-jj6r
   source: 'osv (keywords: model loading,arbitrary code,code execution)'
+- cve: CVE-2026-80047
+  framework: transformers
+  channel: transformers_version
+  formats:
+  - hf_config
+  affected: '>=4.49.0,<=5.8.1'
+  summary: Hugging Face Transformers downloads custom generation code before trust
+    consent
+  reference: https://osv.dev/vulnerability/GHSA-x9r9-c232-4q39
+  source: 'osv (keywords: trust_remote_code)'
