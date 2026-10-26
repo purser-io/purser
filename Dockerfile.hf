@@ -6,7 +6,7 @@
 # Same Wolfi multi-stage venv build as the core image; only the lockfile differs.
 
 # Pinned by digest for reproducible builds (update with: make base-digest).
-ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:9c2092b053779e14c82fb50f77b37bcc38b7d2c83972352d5813280f9d035b03
+ARG WOLFI=cgr.dev/chainguard/wolfi-base:latest@sha256:360896efb0753a5701c48f860e17130c205eae5a264797aa3e7ea126ee2923a7
 
 FROM ${WOLFI} AS build
 WORKDIR /app
@@ -14,10 +14,10 @@ WORKDIR /app
 # the digest pin above does not freeze the toolchain on its own. Refreshed with
 # the digest by wolfi-base-check.yml (manual path: `make apk-pins`).
 RUN apk add --no-cache \
-      python-3.14=3.14.8_git20261001-r1 \
-      python-3.14-dev=3.14.8_git20261001-r1 \
-      py3.14-pip=26.2.1-r2 \
-      build-base=1-r9
+      python-3.14=3.14.8_git20261021-r2 \
+      python-3.14-dev=3.14.8_git20261021-r2 \
+      py3.14-pip=26.2.2-r0 \
+      build-base=1-r10
 RUN python3.14 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 COPY requirements-hf.lock ./
@@ -37,7 +37,7 @@ LABEL org.opencontainers.image.title="Purser-HF" \
       org.opencontainers.image.base.name="cgr.dev/chainguard/wolfi-base:latest"
 
 RUN apk add --no-cache \
-      python-3.14=3.14.8_git20261001-r1 \
+      python-3.14=3.14.8_git20261021-r2 \
     && mkdir -p /models /policies \
     && chown -R 10001:10001 /models /policies
 
