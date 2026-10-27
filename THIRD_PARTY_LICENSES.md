@@ -38,12 +38,12 @@ Total distributed dependencies: **39**
 | `annotated-doc` | 0.0.4 | MIT |
 | `annotated-types` | 0.7.0 | MIT |
 | `anyio` | 4.14.2 | MIT |
-| `certifi` | 2026.6.17 | MPL-2.0 |
+| `certifi` | 2026.10.23 | MPL-2.0 |
 | `cffi` | 2.1.0 | MIT-0 |
 | `click` | 8.4.2 | BSD-3-Clause |
 | `cryptography` | 50.0.0 | Apache-2.0 OR BSD-3-Clause |
 | `fastapi` | 0.139.2 | MIT |
-| `filelock` | 3.30.3 | MIT |
+| `filelock` | 4.2.4 | MIT |
 | `fsspec` | 2026.6.0 | BSD-3-Clause |
 | `h11` | 0.16.0 | MIT |
 | `hf-xet` | 1.5.2 | Apache-2.0 |
