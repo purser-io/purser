@@ -306,11 +306,16 @@ for per-release detail):
   gates on detection/FPR/evasion regression (`benchmarks/`).
 - **Disguise-resistant detection:** magic bytes beat a spoofed extension, and
   directory walks sniff files hidden under doc/config names.
-- **Wolfi base auto-refresh:** a weekly CI job (`wolfi-base-check.yml`) detects a
-  stale base digest and **auto-refreshes** — bumps the pin in all three
-  Dockerfiles, rebuilds each image, runs Trivy (HIGH/CRITICAL, fixed-only — the CI
-  gate) on the new base, and opens a **PR** with the per-image result (falling back
-  to an issue only if the run itself errors). The PR is opened with a scoped
+- **Wolfi base auto-refresh:** a daily CI job (`wolfi-base-check.yml`) scans the
+  images as main pins them (Trivy HIGH/CRITICAL, fixed-only) and **auto-refreshes**
+  when that scan is dirty — or weekly regardless, so pins never drift far. A
+  refresh bumps the base digest, the apk pins (including the runtime stage's full
+  transitive closure, so the build cache cannot decide which version ships) and
+  any Python lockfile pin Trivy flags, then rebuilds, smoke-tests and rescans each
+  image and opens a **PR** with the before/after result (falling back to an issue
+  only when there is no PR to carry the news). Because this job owns "is main
+  clean today?", the Trivy step in `ci.yml` fails a PR only for findings the PR
+  itself introduces; the release gate stays strict. The PR is opened with a scoped
   `GH_PR_TOKEN` secret and DCO-signed (`signoff`), so it passes checks and triggers
   CI; the drift issue is auto-closed on resolution. Supersedes the earlier detect-
   and-open-an-issue job; manual `make base-digest` still prints the live digest.
