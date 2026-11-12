@@ -304,9 +304,19 @@ jobs:
           labels: ${{ steps.result.outputs.labels }}
           body-path: pr-body.md
 
-      - name: Wait before retrying the PR
+      # A failed first attempt has already moved the changes out of the working
+      # tree and into a local `wolfi-base-refresh` commit, so an unprepared retry
+      # sees nothing to propose and exits green without a PR. Put the changes
+      # back first.
+      - name: Wait, then restore the changes for the retry
         if: steps.cpr1.outcome == 'failure'
-        run: sleep 60
+        run: |
+          sleep 60
+          if git rev-parse -q --verify refs/heads/wolfi-base-refresh >/dev/null; then
+            git restore --source=wolfi-base-refresh --worktree -- .
+            git branch -D wolfi-base-refresh
+          fi
+          git status --short
 
       - name: Open / update refresh PR (retry)
         id: cpr2
@@ -329,6 +339,14 @@ jobs:
           title: "build(deps): refresh Wolfi base image"
           labels: ${{ steps.result.outputs.labels }}
           body-path: pr-body.md
+
+      # The retry action exits 0 when it finds nothing to propose; here that
+      # means the changes were lost, not that there are none.
+      - name: Fail if the retry opened no PR
+        if: steps.cpr1.outcome == 'failure' && steps.cpr2.outputs.pull-request-number == ''
+        run: |
+          echo "::error::The refresh PR could not be opened on either attempt."
+          exit 1
 
       # Self-cleaning: once the images are clean again, or a refresh PR is open
       # to make them so, close any stale `wolfi-base` issue left by an earlier
