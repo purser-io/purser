@@ -43,7 +43,7 @@ Total distributed dependencies: **39**
 | `click` | 8.4.2 | BSD-3-Clause |
 | `cryptography` | 50.0.0 | Apache-2.0 OR BSD-3-Clause |
 | `fastapi` | 0.139.2 | MIT |
-| `filelock` | 4.2.4 | MIT |
+| `filelock` | 4.2.10 | MIT |
 | `fsspec` | 2026.6.0 | BSD-3-Clause |
 | `h11` | 0.16.0 | MIT |
 | `hf-xet` | 1.5.2 | Apache-2.0 |
