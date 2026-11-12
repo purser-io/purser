@@ -1,24 +1,42 @@
-# Watches the Chainguard Wolfi base image. The Dockerfiles pin wolfi-base by
-# digest for reproducibility; Chainguard rebuilds `:latest` frequently to pick
-# up CVE fixes, so a static pin silently goes stale. Weekly this job compares the
-# pin against the live index digest and, on drift, **auto-refreshes**: it bumps
-# the pin in all three Dockerfiles, rebuilds each image, runs Trivy (the same
-# HIGH/CRITICAL fixed-only gate as CI) on the new base, and opens a PR with the
-# result. If the run itself errors, it falls back to opening an issue so drift is
-# never silent. (Manual path: `make base-digest` still prints the live digest.)
+# Keeps the three images free of fixable HIGH/CRITICAL CVEs without a human in
+# the loop, and without failing anyone's unrelated PR.
 #
-# The digest is only half the pin: `apk add` resolves against the live Wolfi
-# package repo, so the toolchain (python, pip, build-base) is pinned by version
-# too and refreshed here as well — those versions can move without the digest
-# moving, so that check runs every week regardless of digest drift. This is the
-# update path for the apk pins; nothing in ci.yml gates on them, because live
-# repo drift would otherwise fail unrelated PRs. (Manual path: `make apk-pins`.)
+# Everything an image is built from is pinned — the wolfi-base digest, the apk
+# packages (including the runtime stage's transitive closure) and the Python
+# lockfiles. Pins do not fix themselves: when upstream publishes a fix, the
+# pinned images become "fixably vulnerable" until something moves the pins.
+# That something is this workflow. It answers "is main clean *today*?", which
+# is a question about the calendar, not about any one change — so it runs on a
+# schedule here rather than as a gate on every PR (see the Trivy step in
+# ci.yml, which only fails a PR for findings the PR itself introduces).
+#
+# Daily:
+#   1. Build and scan the images exactly as main pins them.
+#   2. Refresh if that scan is dirty (CVE-driven, any day) or it is Monday
+#      (weekly hygiene, so pins never drift far) or the run was dispatched by
+#      hand. Otherwise stop — Chainguard rebuilds `:latest` daily, and a PR
+#      for every rebuild would be noise.
+#   3. Refresh = bump the base digest, re-pin the apk packages
+#      (scripts/repin_apk.py), and — if Trivy still flags Python packages —
+#      bump exactly those pins in the lockfiles (`make lock LOCK_UPGRADE=...`).
+#   4. Rebuild, smoke-test (the service must still start) and rescan, then
+#      open/update one PR carrying the before/after scan results.
+#
+# Never silent: if findings remain that the refresh could not fix, the PR says
+# so and the run is failed; if there is no PR to carry the news, an issue is
+# opened instead. (Manual paths: `make base-digest`, `make apk-pins`,
+# `make lock LOCK_UPGRADE="pkg ..."`.)
 name: Wolfi base auto-refresh
 
 on:
   schedule:
-    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+    - cron: "0 6 * * *"   # daily 06:00 UTC
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Refresh the pins even if the current images scan clean"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -27,9 +45,14 @@ concurrency:
   group: wolfi-base-refresh
   cancel-in-progress: false
 
+env:
+  REPORTS_BEFORE: trivy-before/core.json trivy-before/hf.json trivy-before/deep.json
+  REPORTS_AFTER: trivy-after/core.json trivy-after/hf.json trivy-after/deep.json
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write        # push the refresh branch
       pull-requests: write   # open/update the PR
@@ -37,19 +60,67 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Resolve pinned vs live base digest
-        id: check
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          # Pin uv: lockfile output is uv-version-specific, so this must match
+          # the version ci.yml verifies the committed locks with.
+          version: "0.11.7"
+
+      # The same scanner version trivy-action@v0.36.0 runs in ci.yml and
+      # release.yml, so "clean" here means "clean" there. Bump them together.
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          version: v0.70.0
+          cache: true
+
+      - name: Scan the images as main pins them
+        id: before
+        run: |
+          set -uo pipefail
+          scripts/build_and_scan.sh before trivy-before || exit $?
+          # shellcheck disable=SC2086
+          if python3 scripts/trivy_gate.py report $REPORTS_BEFORE | tee before.txt; then
+            echo "dirty=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dirty=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether to refresh
+        id: plan
+        env:
+          DIRTY: ${{ steps.before.outputs.dirty }}
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
+          if [ "$DIRTY" = "true" ]; then
+            reason=cve
+          elif [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" != "false" ]; then
+            reason=manual
+          elif [ "$(date -u +%u)" = "1" ]; then
+            reason=weekly
+          else
+            reason=none
+          fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Refresh reason: $reason"
+
+      - name: Resolve pinned vs live base digest
+        id: check
+        if: steps.plan.outputs.reason != 'none'
+        run: |
+          set -euo pipefail
+          fetch() { curl -fsS --retry 5 --retry-all-errors --retry-delay 5 "$@"; }
           pinned=$(grep -oE 'sha256:[a-f0-9]{64}' Dockerfile | head -1)
-          token=$(curl -s "https://cgr.dev/token?scope=repository:chainguard/wolfi-base:pull" | jq -r .token)
-          live=$(curl -sI \
+          token=$(fetch "https://cgr.dev/token?scope=repository:chainguard/wolfi-base:pull" | jq -r .token)
+          live=$(fetch -I \
             -H "Authorization: Bearer ${token}" \
             -H "Accept: application/vnd.oci.image.index.v1+json" \
             -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
             "https://cgr.dev/v2/chainguard/wolfi-base/manifests/latest" \
             | grep -i '^docker-content-digest:' | tr -d '\r' | awk '{print $2}')
-          if [ -z "$pinned" ] || [ -z "$live" ]; then
+          if ! [[ "$pinned" =~ ^sha256:[a-f0-9]{64}$ && "$live" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "could not resolve digests (pinned='$pinned' live='$live')" >&2
             exit 1
           fi
@@ -57,140 +128,158 @@ jobs:
           echo "live=$live"     >> "$GITHUB_OUTPUT"
           echo "Pinned: $pinned"
           echo "Live:   $live"
-          if [ "$pinned" = "$live" ]; then
-            echo "drift=false" >> "$GITHUB_OUTPUT"
-            echo "Base image is current."
-          else
-            echo "drift=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Bump the digest pin in all Dockerfiles
-        if: steps.check.outputs.drift == 'true'
-        run: |
-          set -euo pipefail
-          for f in Dockerfile Dockerfile.hf Dockerfile.deep; do
-            sed -i "s#${{ steps.check.outputs.pinned }}#${{ steps.check.outputs.live }}#g" "$f"
-          done
 
       # The digest pin alone does not freeze the toolchain: `apk add` resolves
-      # against the live Wolfi repo, so python/pip/build-base are pinned by
-      # version too. Those can drift *without* the digest moving (Chainguard
-      # publishes a package before rebuilding wolfi-base), so this runs
-      # unconditionally — otherwise an apk-only security update would never
-      # reach a PR.
-      - name: Re-pin apk package versions
-        id: apk
+      # against the live Wolfi repo, so the apk packages are pinned by version
+      # too. Those can drift *without* the digest moving (Chainguard publishes
+      # a package before rebuilding wolfi-base), so the re-pin runs whether or
+      # not the digest moved.
+      - name: Refresh the base digest and apk pins
+        id: pins
+        if: steps.plan.outputs.reason != 'none'
+        env:
+          PINNED: ${{ steps.check.outputs.pinned }}
+          LIVE: ${{ steps.check.outputs.live }}
         run: |
           set -euo pipefail
+          if [ "$PINNED" != "$LIVE" ]; then
+            sed -i "s#${PINNED}#${LIVE}#g" Dockerfile Dockerfile.hf Dockerfile.deep
+          fi
           python3 scripts/repin_apk.py
           if git diff --quiet -- Dockerfile Dockerfile.hf Dockerfile.deep; then
-            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff -- Dockerfile Dockerfile.hf Dockerfile.deep
           fi
 
-      - name: Decide whether anything drifted
-        id: drift
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.check.outputs.drift }}" = "true" ] \
-             || [ "${{ steps.apk.outputs.drift }}" = "true" ]; then
-            echo "any=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "any=false" >> "$GITHUB_OUTPUT"
-          fi
-          git --no-pager diff -- Dockerfile Dockerfile.hf Dockerfile.deep
-
-      - name: Build all three images on the new base
-        id: build
-        if: steps.drift.outputs.any == 'true'
-        continue-on-error: true
+      # Base and apk pins cannot fix a vulnerable *Python* pin: `make lock`
+      # keeps every pin that still satisfies pyproject.toml, so certifi,
+      # filelock, cryptography and friends stay put until told otherwise. Trivy
+      # names the offenders; bump exactly those and prove it with a rescan.
+      - name: Rebuild, fix flagged Python pins, rescan
+        id: after
+        if: >-
+          steps.plan.outputs.reason != 'none' &&
+          (steps.pins.outputs.changed == 'true' || steps.before.outputs.dirty == 'true')
+        env:
+          PINS_CHANGED: ${{ steps.pins.outputs.changed }}
         run: |
           set -uo pipefail
-          rc=0
-          docker build -t purser-core:refresh -f Dockerfile     . || rc=1
-          docker build -t purser-hf:refresh   -f Dockerfile.hf   . || rc=1
-          docker build -t purser-deep:refresh -f Dockerfile.deep . || rc=1
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          exit $rc
+          if [ "$PINS_CHANGED" = "true" ]; then
+            scripts/build_and_scan.sh after trivy-after || exit $?
+          else
+            cp -r trivy-before trivy-after
+          fi
 
-      - name: Trivy — core
-        id: tv_core
-        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
+          bumped=""
+          upgrades=$(python3 scripts/trivy_gate.py lock-upgrades trivy-after/*.json)
+          if [ -n "$upgrades" ]; then
+            echo "Trivy flags these Python pins: $upgrades"
+            if ! make -s lock LOCK_UPGRADE="$upgrades" >/dev/null; then
+              # An unresolvable bump must not cost us the apk refresh.
+              echo "::warning::could not upgrade $upgrades in the lockfiles; leaving them as they were"
+              git checkout -- requirements.lock requirements-hf.lock requirements-deep.lock
+            elif ! git diff --quiet -- requirements.lock requirements-hf.lock requirements-deep.lock; then
+              bumped=$upgrades
+              git --no-pager diff --stat -- requirements.lock requirements-hf.lock requirements-deep.lock
+              scripts/build_and_scan.sh after trivy-after || exit $?
+            fi
+          fi
+          echo "upgrades=$bumped" >> "$GITHUB_OUTPUT"
+
+          # shellcheck disable=SC2086
+          if python3 scripts/trivy_gate.py report $REPORTS_AFTER | tee after.txt; then
+            echo "dirty=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dirty=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Best effort: the license table lists pinned versions, so it follows a
+      # lockfile bump. ci.yml gates on licenses being resolved, not on this
+      # file being byte-current, so a failure here must not block the fix.
+      - name: Regenerate THIRD_PARTY_LICENSES.md
+        if: steps.after.outputs.upgrades != ''
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: purser-core:refresh
-          exit-code: "1"
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-
-      - name: Trivy — hf
-        id: tv_hf
-        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: purser-hf:refresh
-          exit-code: "1"
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-
-      - name: Trivy — deep
-        id: tv_deep
-        if: steps.drift.outputs.any == 'true' && steps.build.outputs.rc == '0'
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: purser-deep:refresh
-          exit-code: "1"
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-
-      - name: Assemble PR body
-        id: body
-        if: steps.drift.outputs.any == 'true'
         run: |
-          verdict() {
-            case "$1" in
-              success) echo "✅ build + Trivy clean" ;;
-              failure) echo "⚠️ Trivy found fixable HIGH/CRITICAL — review" ;;
-              *)       echo "— not scanned (image failed to build)" ;;
-            esac
-          }
-          {
-            echo "body<<PRBODY"
-            if [ "${{ steps.check.outputs.drift }}" = "true" ]; then
-              echo "Automated Wolfi base refresh — Chainguard rebuilt \`cgr.dev/chainguard/wolfi-base:latest\`, so the digest pin went stale."
-              echo ""
-              echo "| | digest |"
-              echo "|---|---|"
-              echo "| old (pinned) | \`${{ steps.check.outputs.pinned }}\` |"
-              echo "| new (\`:latest\`) | \`${{ steps.check.outputs.live }}\` |"
-            else
-              echo "Automated Wolfi refresh — the base digest is unchanged (\`${{ steps.check.outputs.pinned }}\`), but the pinned **apk package versions** drifted: Chainguard published newer packages than the ones currently pinned."
-            fi
-            if [ "${{ steps.apk.outputs.drift }}" = "true" ]; then
-              echo ""
-              echo "apk version pins were refreshed — see the diff for the exact bumps."
-            fi
-            echo ""
-            echo "**Build + Trivy on the new base** (HIGH/CRITICAL, fixed-only — same gate as CI):"
-            echo "- core: $(verdict '${{ steps.tv_core.outcome }}')"
-            echo "- hf:   $(verdict '${{ steps.tv_hf.outcome }}')"
-            echo "- deep: $(verdict '${{ steps.tv_deep.outcome }}')"
-            if [ "${{ steps.build.outputs.rc }}" != "0" ]; then
-              echo ""
-              echo "> ⚠️ One or more images **failed to build** on the new base — investigate before merging."
-            fi
-            echo ""
-            echo "> Note: PRs opened by \`GITHUB_TOKEN\` do not trigger \`ci.yml\`, so the build + Trivy above is the authoritative gate. A maintainer can re-run CI (close/reopen the PR) before merge if desired."
-            echo "PRBODY"
-          } >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          uv venv --clear
+          uv pip install -e ".[dev,sign,hf,deep]"
+          uv run make licenses || { git checkout -- THIRD_PARTY_LICENSES.md; exit 1; }
 
+      - name: Summarize the outcome
+        id: result
+        if: steps.plan.outputs.reason != 'none'
+        env:
+          REASON: ${{ steps.plan.outputs.reason }}
+          PINNED: ${{ steps.check.outputs.pinned }}
+          LIVE: ${{ steps.check.outputs.live }}
+          UPGRADES: ${{ steps.after.outputs.upgrades }}
+          BEFORE_DIRTY: ${{ steps.before.outputs.dirty }}
+          AFTER_DIRTY: ${{ steps.after.outputs.dirty }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Dockerfile Dockerfile.hf Dockerfile.deep \
+               requirements.lock requirements-hf.lock requirements-deep.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          # Nothing was rebuilt (pins already current, scan clean): "after" is "before".
+          remaining=${AFTER_DIRTY:-$BEFORE_DIRTY}
+          echo "remaining=$remaining" >> "$GITHUB_OUTPUT"
+          [ -f after.txt ] || cp before.txt after.txt
+
+          if [ "$BEFORE_DIRTY" = "true" ]; then
+            echo "labels=wolfi-base,dependencies,security" >> "$GITHUB_OUTPUT"
+          else
+            echo "labels=wolfi-base,dependencies" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            case "$REASON" in
+              cve)    echo "Automated image refresh — **the images main currently pins have fixable HIGH/CRITICAL findings**, so this is a security update, not routine drift." ;;
+              weekly) echo "Automated weekly image refresh — routine pin drift; the images main currently pins scan clean." ;;
+              *)      echo "Automated image refresh (manually dispatched)." ;;
+            esac
+            echo ""
+            if [ "$PINNED" != "$LIVE" ]; then
+              echo "| base digest | |"
+              echo "|---|---|"
+              echo "| old (pinned) | \`$PINNED\` |"
+              echo "| new (\`:latest\`) | \`$LIVE\` |"
+            else
+              echo "The base digest is unchanged (\`$PINNED\`); only package pins moved."
+            fi
+            if [ -n "$UPGRADES" ]; then
+              echo ""
+              echo "Python lockfile pins bumped because Trivy flagged them: \`$UPGRADES\` (targeted \`make lock LOCK_UPGRADE=...\`; no other pin moves)."
+            fi
+            echo ""
+            echo "**Before** — images as pinned on main:"
+            echo '```'
+            cat before.txt
+            echo '```'
+            echo "**After** — rebuilt on this branch, each image started and answered \`/healthz\`:"
+            echo '```'
+            cat after.txt
+            echo '```'
+            echo "Scans are HIGH/CRITICAL, fixed-only — the same filter as the CI and release gates."
+            if [ "$remaining" = "true" ]; then
+              echo ""
+              echo "> [!WARNING]"
+              echo "> Findings remain that this refresh could not fix (or an image no longer builds/starts). Merging still improves on main, but the workflow run is failed so this is not mistaken for done."
+            fi
+          } > pr-body.md
+          cat pr-body.md
+
+      # A push can be rejected for reasons that have nothing to do with us (a
+      # transient "fatal error in commit_refs_rules" once cost a two-day gap
+      # until someone re-ran the job), so the PR step gets a second attempt.
       - name: Open / update refresh PR
-        id: cpr
-        if: steps.drift.outputs.any == 'true'
+        id: cpr1
+        if: steps.result.outputs.changed == 'true'
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v8
         with:
           # Fine-grained PAT / App token (Contents + Pull requests: write) so the
@@ -205,29 +294,79 @@ jobs:
             Dockerfile
             Dockerfile.hf
             Dockerfile.deep
-          commit-message: "build(deps): refresh wolfi-base pin (${{ steps.check.outputs.live }}) and apk version pins"
+            requirements.lock
+            requirements-hf.lock
+            requirements-deep.lock
+            THIRD_PARTY_LICENSES.md
+          commit-message: "build(deps): refresh wolfi-base pin (${{ steps.check.outputs.live }}), apk and lockfile pins"
           signoff: true
           title: "build(deps): refresh Wolfi base image"
-          labels: |
-            wolfi-base
-            dependencies
-          body: ${{ steps.body.outputs.body }}
+          labels: ${{ steps.result.outputs.labels }}
+          body-path: pr-body.md
 
-      # Self-cleaning: once a refresh PR is open (drift handled) or the base is
-      # current again (PR merged), close any stale `wolfi-base` issue left by an
-      # earlier run so drift state isn't tracked in two places.
-      - name: Close stale drift issue
+      # A failed first attempt has already moved the changes out of the working
+      # tree and into a local `wolfi-base-refresh` commit, so an unprepared retry
+      # sees nothing to propose and exits green without a PR. Put the changes
+      # back first.
+      - name: Wait, then restore the changes for the retry
+        if: steps.cpr1.outcome == 'failure'
+        run: |
+          sleep 60
+          if git rev-parse -q --verify refs/heads/wolfi-base-refresh >/dev/null; then
+            git restore --source=wolfi-base-refresh --worktree -- .
+            git branch -D wolfi-base-refresh
+          fi
+          git status --short
+
+      - name: Open / update refresh PR (retry)
+        id: cpr2
+        if: steps.cpr1.outcome == 'failure'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GH_PR_TOKEN || github.token }}
+          branch: wolfi-base-refresh
+          delete-branch: true
+          add-paths: |
+            Dockerfile
+            Dockerfile.hf
+            Dockerfile.deep
+            requirements.lock
+            requirements-hf.lock
+            requirements-deep.lock
+            THIRD_PARTY_LICENSES.md
+          commit-message: "build(deps): refresh wolfi-base pin (${{ steps.check.outputs.live }}), apk and lockfile pins"
+          signoff: true
+          title: "build(deps): refresh Wolfi base image"
+          labels: ${{ steps.result.outputs.labels }}
+          body-path: pr-body.md
+
+      # The retry action exits 0 when it finds nothing to propose; here that
+      # means the changes were lost, not that there are none.
+      - name: Fail if the retry opened no PR
+        if: steps.cpr1.outcome == 'failure' && steps.cpr2.outputs.pull-request-number == ''
+        run: |
+          echo "::error::The refresh PR could not be opened on either attempt."
+          exit 1
+
+      # Self-cleaning: once the images are clean again, or a refresh PR is open
+      # to make them so, close any stale `wolfi-base` issue left by an earlier
+      # run so the state isn't tracked in two places.
+      - name: Close stale refresh issue
         if: >-
           always() &&
-          (steps.drift.outputs.any == 'false' ||
-           (steps.drift.outputs.any == 'true' && steps.cpr.outputs.pull-request-number))
+          (steps.plan.outputs.reason == 'none' ||
+           steps.result.outputs.remaining == 'false' ||
+           steps.cpr1.outputs.pull-request-number ||
+           steps.cpr2.outputs.pull-request-number)
         uses: actions/github-script@v9
+        env:
+          PR_URL: ${{ steps.cpr1.outputs.pull-request-url || steps.cpr2.outputs.pull-request-url }}
         with:
           script: |
-            const prUrl = "${{ steps.cpr.outputs.pull-request-url }}";
+            const prUrl = process.env.PR_URL;
             const reason = prUrl
-              ? `Superseded by the auto-refresh PR: ${prUrl}. Closing — the bump is tracked there.`
-              : "Wolfi base is current again; closing this drift issue.";
+              ? `Superseded by the auto-refresh PR: ${prUrl}. Closing — the fix is tracked there.`
+              : "The images scan clean again; closing this refresh issue.";
             const open = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
               state: "open", labels: "wolfi-base",
@@ -247,28 +386,57 @@ jobs:
               });
             }
 
-      - name: Fallback issue if the refresh run errored
-        if: failure()
+      # The PR is the human channel, a red run is the alerting channel. Raised
+      # only now, so that what *could* be fixed has already been proposed.
+      - name: Re-raise findings the refresh could not fix
+        if: steps.result.outputs.remaining == 'true'
+        run: |
+          echo "::error::Fixable HIGH/CRITICAL findings remain after the refresh (or an image no longer builds/starts):"
+          cat after.txt
+          exit 1
+
+      # Only for failures with no PR to carry the news: the run errored, or
+      # findings remain and there was nothing to change. With a PR open, the
+      # PR body already says it.
+      - name: Fallback issue if there is no PR to carry the news
+        if: >-
+          failure() &&
+          steps.cpr1.outputs.pull-request-url == '' &&
+          steps.cpr2.outputs.pull-request-url == ''
         uses: actions/github-script@v9
+        env:
+          PINNED: ${{ steps.check.outputs.pinned }}
+          LIVE: ${{ steps.check.outputs.live }}
         with:
           script: |
-            const pinned = "${{ steps.check.outputs.pinned }}" || "(unresolved)";
-            const live   = "${{ steps.check.outputs.live }}"   || "(unresolved)";
-            const title  = "Wolfi base auto-refresh failed";
-            const run    = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const fs = require("fs");
+            const read = (f) => fs.existsSync(f) ? fs.readFileSync(f, "utf8").trim() : "(not produced)";
+            const title = "Wolfi base auto-refresh failed";
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
-              "The Wolfi base **auto-refresh** run errored — drift may be unhandled.",
+              "The image **auto-refresh** run failed without opening a PR — either the run",
+              "itself errored, or the images have fixable HIGH/CRITICAL findings that",
+              "refreshing the pins did not clear.",
               "",
               "| | digest |",
               "|---|---|",
-              "| pinned (Dockerfiles) | `" + pinned + "` |",
-              "| live `:latest` | `" + live + "` |",
+              "| pinned (Dockerfiles) | `" + (process.env.PINNED || "(unresolved)") + "` |",
+              "| live `:latest` | `" + (process.env.LIVE || "(unresolved)") + "` |",
+              "",
+              "Scan of the images as pinned on main:",
+              "```",
+              read("before.txt"),
+              "```",
+              "Scan after the attempted refresh:",
+              "```",
+              read("after.txt"),
+              "```",
               "",
               "Run log: " + run,
               "",
-              "Fix manually if needed: bump the `ARG WOLFI=...@<digest>` line in " +
-              "`Dockerfile`, `Dockerfile.hf`, and `Dockerfile.deep` to the live " +
-              "digest (`make base-digest` prints it), then rebuild.",
+              "Manual path: `make base-digest` (bump the `ARG WOLFI=...@<digest>` line in",
+              "all three Dockerfiles), `make apk-pins`, and for Python packages",
+              "`make lock LOCK_UPGRADE=\"<package> ...\"`.",
             ].join("\n");
             const existing = (await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,

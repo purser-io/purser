@@ -136,10 +136,74 @@ jobs:
           # not_found" after all layers built) must not fail the build —
           # the cache is an optimization, not a correctness gate.
           cache-to: type=gha,mode=max,ignore-error=true,scope=${{ matrix.name }}
+      # A Trivy-clean image that cannot start is not a pass: the refresh bot
+      # bumps apk and lockfile pins unattended, so prove the service boots.
+      - name: Smoke test (${{ matrix.name }} starts and answers /healthz)
+        run: scripts/smoke_image.sh purser-${{ matrix.name }}:ci
+
+      # The vulnerability gate asks one question here: did THIS change add a
+      # fixable HIGH/CRITICAL finding? Findings the base revision already has
+      # are reported as a warning but do not fail the job — they appear when
+      # upstream publishes a fix for something already pinned, which no PR
+      # author can act on, and they used to turn every open PR red until the
+      # pins were refreshed. "Is main clean today?" is answered daily by
+      # wolfi-base-check.yml (which also opens the fix), and "may this ship?"
+      # by the strict gate in release.yml.
       - name: Trivy scan (HIGH/CRITICAL, fixed only)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: purser-${{ matrix.name }}:ci
-          exit-code: "1"
+          format: json
+          output: trivy-head.json
+          exit-code: "0"
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+      - name: Report findings
+        id: head
+        run: |
+          if python3 scripts/trivy_gate.py report trivy-head.json; then
+            echo "dirty=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dirty=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only when there is something to attribute: build the base revision the
+      # same way and scan it, so the gate can tell inherited from introduced.
+      # Any failure to produce that baseline (first push, base no longer
+      # builds) leaves no base report, and the gate then excuses nothing.
+      - name: Check out the base revision
+        if: steps.head.outputs.dirty == 'true'
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+          path: .trivy-base
+      - name: Build ${{ matrix.name }} at the base revision
+        id: basebuild
+        if: steps.head.outputs.dirty == 'true'
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        with:
+          context: .trivy-base
+          file: .trivy-base/${{ matrix.file }}
+          push: false
+          load: true
+          tags: purser-${{ matrix.name }}:base
+          cache-from: type=gha,scope=${{ matrix.name }}
+      - name: Trivy scan of the base revision
+        if: steps.head.outputs.dirty == 'true' && steps.basebuild.outcome == 'success'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: purser-${{ matrix.name }}:base
+          format: json
+          output: trivy-base.json
+          exit-code: "0"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+      - name: Gate on findings this change introduces
+        if: steps.head.outputs.dirty == 'true'
+        run: |
+          python3 scripts/trivy_gate.py diff \
+            --base trivy-base.json --head trivy-head.json \
+            --name "docker build (${{ matrix.name }})"

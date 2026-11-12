@@ -46,6 +46,9 @@ make licenses    # THIRD_PARTY_LICENSES.md
    content as data — never execute it.
 3. Run `ruff check` and `pytest` locally. CI enforces both across Python
    3.11–3.14, plus Helm lint, an image build + Trivy scan, and the DCO check.
+   The Trivy step fails only for fixable HIGH/CRITICAL findings your change
+   introduces; ones already on `main` show as a warning and are fixed by the
+   scheduled image refresh, not by you.
 4. Add a note under [`CHANGELOG.md`](CHANGELOG.md) for any user-facing change.
 5. Open a pull request and fill in the template.
 

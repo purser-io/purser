@@ -24,6 +24,8 @@ import argparse
 import json
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -108,6 +110,32 @@ LOAD_TRIGGERS = (
 )
 
 
+def _post_json(req: urllib.request.Request, attempts: int = 4) -> dict:
+    """One OSV request, retried with backoff.
+
+    The scheduled refresh makes a handful of calls a week; a single timeout or
+    5xx should cost a few seconds, not the whole run and a fallback issue. A
+    4xx is our bug and will not get better, so it is raised straight away.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 and exc.code != 429:
+                raise
+            error: Exception = exc
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            error = exc
+        if attempt == attempts:
+            raise error
+        delay = 2 ** attempt
+        print(f"OSV request failed ({error}); retry {attempt}/{attempts - 1} "
+              f"in {delay}s", file=sys.stderr)
+        time.sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def fetch_vulns(package: str, ecosystem: str) -> list[dict]:
     vulns: list[dict] = []
     page_token = None
@@ -118,8 +146,7 @@ def fetch_vulns(package: str, ecosystem: str) -> list[dict]:
         req = urllib.request.Request(
             OSV_API, data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
+        data = _post_json(req)
         vulns.extend(data.get("vulns") or [])
         page_token = data.get("next_page_token")
         if not page_token:

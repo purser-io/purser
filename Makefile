@@ -19,9 +19,16 @@ help:
 # Resolve for the image runtime (linux/py3.14) regardless of the host OS/arch,
 # so the lockfiles are reproducible on a laptop and in CI alike.
 UV_COMPILE = uv pip compile --generate-hashes \
-	--python-platform x86_64-unknown-linux-gnu --python-version 3.14
+	--python-platform x86_64-unknown-linux-gnu --python-version 3.14 \
+	$(foreach pkg,$(LOCK_UPGRADE),--upgrade-package $(pkg))
 
-lock: ## Regenerate hash-pinned lockfiles from pyproject.toml
+# `make lock` keeps every existing pin that still satisfies pyproject.toml, so
+# a vulnerable transitive pin (certifi, filelock, …) never moves on its own.
+# `make lock LOCK_UPGRADE="certifi filelock"` moves just those; the Wolfi
+# refresh workflow passes whatever Trivy flags in the built images.
+LOCK_UPGRADE ?=
+
+lock: ## Regenerate hash-pinned lockfiles from pyproject.toml (LOCK_UPGRADE="pkg ..." bumps named pins)
 	$(UV_COMPILE) --extra sign -o requirements.lock pyproject.toml
 	$(UV_COMPILE) --extra sign --extra hf -o requirements-hf.lock pyproject.toml
 	$(UV_COMPILE) --extra deep -o requirements-deep.lock pyproject.toml
