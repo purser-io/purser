@@ -945,3 +945,4 @@ Product names, logos, and brands referenced here (e.g. ModelScan, picklescan,
 Fickling, ModelAudit, Protect AI Guardian, HiddenLayer, Kubernetes, GitLab,
 Hugging Face) are trademarks of their respective owners; see
 [`TRADEMARKS.md`](TRADEMARKS.md) for use of the Purser name and logo.
+
