@@ -22,6 +22,7 @@ RUN python3.14 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 COPY requirements-hf.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements-hf.lock
+RUN pip install --no-cache-dir --no-deps certifi==2026.6.17
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir --no-deps .
