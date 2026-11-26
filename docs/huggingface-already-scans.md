@@ -68,6 +68,38 @@ purser scan ./my-finetune --policy policies/strict.yaml
 purser scan ./my-finetune --format cyclonedx -o mlbom.json
 ```
 
+## "Uncensored" and abliterated models
+
+An abliterated or "uncensored" model has had its refusal behaviour removed or
+weakened. That is a change in the **weights**, not code in the file, so neither
+the Hub's scanners nor Purser's scanner can see it. A clean Purser scan of such
+a model means the file will not run code or leak data when it is *loaded*. It
+says nothing about what the model will *say* once it is running.
+
+So Purser does not make an uncensored model behave more safely. What it gives
+you is control over whether one gets in:
+
+- **Block by name.** Most are labelled as such. A two-line policy refuses them:
+
+  ```yaml
+  models:
+    mode: blocklist
+    patterns: ["*abliterated*", "*uncensored*"]
+  ```
+
+  A repository named `someone/Llama-3-8B-abliterated` then gets `BLOCKED`
+  (exit code 2). A renamed copy passes this check, so it is a guardrail against
+  accidents, not against someone hiding the fact.
+- **Allow only publishers or signers you trust.** A publisher allowlist or
+  `require_signed` keeps out anonymous re-uploads of any kind, which is where
+  most modified models come from.
+- **Scan it like anything else.** These models are usually community uploads in
+  pickle or GGUF form, where the load-time risks in the table above apply as
+  much as they do to any other model.
+
+Judging behaviour needs the model to be run against test prompts, which
+Purser's core never does; see *Out of scope* in the [roadmap](../ROADMAP.md).
+
 ## What Purser does not do
 
 - **It is not a replacement for the Hub's scanners.** Purser has no antivirus
