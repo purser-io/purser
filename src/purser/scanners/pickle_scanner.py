@@ -197,7 +197,7 @@ class PickleScanner(Scanner):
     def scan_bytes(self, data: bytes, source: str = "") -> list[Finding]:
         findings: list[Finding] = []
         imports: list[tuple[str, str]] = []
-        reduce_count = 0
+        invoked = [0]  # REDUCE/INST count, kept even if a stream breaks mid-parse
         parse_error: str | None = None
         stream = io.BytesIO(data)
         pickles_parsed = 0
@@ -205,8 +205,7 @@ class PickleScanner(Scanner):
         while stream.tell() < len(data):
             start = stream.tell()
             try:
-                ops = self._collect_ops(stream, imports)
-                reduce_count += ops
+                self._collect_ops(stream, imports, invoked)
                 pickles_parsed += 1
             except Exception as exc:
                 if pickles_parsed == 0:
@@ -232,8 +231,14 @@ class PickleScanner(Scanner):
                     tags=["evasion"],
                 )
             )
-            return findings
+            # Deliberately no early return. The unpickler executes opcodes as
+            # it reads them, so a payload placed *before* the break still runs
+            # on load (the "nullifAI" shape). Everything parsed up to the break
+            # is classified below — dangerous imports only: bytes that were
+            # never a pickle can decode to junk "imports", and reporting those
+            # as unknown symbols would be noise on top of the finding above.
 
+        reduce_count = invoked[0]
         seen: set[tuple[str, str]] = set()
         for module, ident in imports:
             if (module, ident) in seen:
@@ -262,7 +267,7 @@ class PickleScanner(Scanner):
                         evidence={"module": module, "name": ident, "invoked": invoked},
                     )
                 )
-            elif not is_known_safe(module, ident):
+            elif parse_error is None and not is_known_safe(module, ident):
                 lowered = full.lower()
                 hinted = any(h in lowered for h in SUSPICIOUS_NAME_HINTS)
                 findings.append(
@@ -278,15 +283,17 @@ class PickleScanner(Scanner):
                 )
         return findings
 
-    def _collect_ops(self, stream: io.BytesIO, imports: list[tuple[str, str]]) -> int:
+    def _collect_ops(self, stream: io.BytesIO, imports: list[tuple[str, str]],
+                     invoked: list[int]) -> None:
         """Parse one pickle from stream, appending discovered imports.
 
-        Returns the number of REDUCE/INST/OBJ opcodes (callable invocations).
+        `invoked[0]` is incremented per REDUCE/INST opcode (callable
+        invocations) as they are read, so both it and `imports` stay valid if
+        the stream turns out to be malformed part-way through.
         """
         memo: dict[object, str] = {}
         string_stack: list[str] = []
         last_string: str | None = None
-        reduce_ops = 0
 
         for opcode, arg, _pos in pickletools.genops(stream):
             opname = opcode.name
@@ -307,7 +314,7 @@ class PickleScanner(Scanner):
             elif opname == "INST":
                 parts = str(arg).split(" ", 1)
                 imports.append((parts[0], parts[1] if len(parts) > 1 else ""))
-                reduce_ops += 1
+                invoked[0] += 1
             elif opname == "STACK_GLOBAL":
                 if len(string_stack) >= 2:
                     imports.append((string_stack[-2], string_stack[-1]))
@@ -316,5 +323,4 @@ class PickleScanner(Scanner):
                 string_stack.clear()
             elif opname in ("REDUCE", "OBJ", "NEWOBJ", "NEWOBJ_EX"):
                 if opname == "REDUCE":
-                    reduce_ops += 1
-        return reduce_ops
+                    invoked[0] += 1

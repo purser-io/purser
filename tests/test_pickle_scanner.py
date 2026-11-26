@@ -59,3 +59,24 @@ def test_corrupt_pickle_flagged(tmp_path: Path):
     p.write_bytes(b"\x80\x04\xff\xff\xff\xff")
     findings = PickleScanner().scan(p)
     assert any(f.rule_id == "PICKLE_UNPARSEABLE" for f in findings)
+
+
+def test_payload_before_a_broken_stream_is_still_reported(tmp_path: Path):
+    """The unpickler runs opcodes as it reads them, so a dangerous call placed
+    before a deliberately broken tail executes on load. A scanner that stops at
+    "unparseable" misses it (the nullifAI evasion)."""
+    import os
+    import pickle
+
+    class Payload:
+        def __reduce__(self):
+            return (os.system, ("echo inert",))
+
+    whole = pickle.dumps(Payload(), protocol=2)
+    p = tmp_path / "model.pkl"
+    p.write_bytes(whole[:-1] + b"\xff\xfe broken tail")  # drop STOP, append junk
+    findings = PickleScanner().scan(p)
+    rules = {f.rule_id for f in findings}
+    assert "PICKLE_UNPARSEABLE" in rules
+    dangerous = [f for f in findings if f.rule_id == "PICKLE_DANGEROUS_IMPORT"]
+    assert dangerous and dangerous[0].evidence["invoked"] is True

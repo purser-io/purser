@@ -7,7 +7,19 @@ GitHub notes are generated automatically; this file is the curated summary.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- **Payload before a broken pickle stream is now reported.** A pickle whose
+  stream was deliberately malformed *after* a dangerous call was reported only
+  as `PICKLE_UNPARSEABLE` (MEDIUM); the imports parsed before the break were
+  discarded. The unpickler executes opcodes as it reads them, so that payload
+  runs on load (the "nullifAI" evasion). The scanner now also classifies
+  everything parsed up to the break, so such a file gets
+  `PICKLE_DANGEROUS_IMPORT` alongside `PICKLE_UNPARSEABLE`.
+
+### Added
+- **Docs: "Hugging Face already scans models. Why would we need Purser?"**
+  (`docs/huggingface-already-scans.md`) — a sourced, gap-by-gap answer with a
+  two-minute demo and an explicit list of what Purser does not do.
 
 ## [0.3.0] - 2026-08-02
 ### Changed
