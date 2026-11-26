@@ -258,6 +258,13 @@ need policy/provenance. All static scanners — this one included — can be eva
 novel pickle gadgets; treat a clean scan as
 necessary, not sufficient.
 
+> **"Hugging Face already scans models — why would we need Purser?"** The Hub
+> flags files hosted on the Hub; a flag is a warning badge, and the file still
+> downloads. Purser turns evidence into an enforced decision, for models from
+> anywhere, under your own policy. The sourced, gap-by-gap answer — including
+> what Purser does *not* do — is in
+> [docs/huggingface-already-scans.md](docs/huggingface-already-scans.md).
+
 > **Reproducible numbers.** These rows aren't just asserted — a head-to-head
 > harness runs Purser and the OSS peers over a shared known-answer corpus and
 > publishes detection / miss / false-positive figures: **100% detection on the

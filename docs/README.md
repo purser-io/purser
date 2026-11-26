@@ -12,6 +12,7 @@ Pick the guide that matches you:
 |---|---|
 | Setting Purser up in **GitLab** so model files get scanned automatically | [**DevSecOps + GitLab guide**](devsecops-gitlab.md) |
 | A **data scientist / ML engineer** who downloads or uses models and wants to check they're safe | [**Data scientist guide**](data-scientists.md) |
+| Asking **"Hugging Face already scans models, why do we need this?"** | [**Hugging Face already scans — why Purser?**](huggingface-already-scans.md) |
 | Writing the **rules** for which models are allowed | [**Configuring a policy**](configuring-policy.md) |
 | Running models at home — **Ollama**, Docker, Unraid, K3s | [**Homelab guide**](homelab.md) |
 | Mapping findings to **OWASP / NIST AI RMF / EU AI Act** controls for an audit | [**Compliance mapping**](compliance-mapping.md) |
